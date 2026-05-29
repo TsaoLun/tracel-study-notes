@@ -1,27 +1,29 @@
 # 不是加载模型，是编译模型：Burn ONNX 的构建时代码生成
 
-> ONNX Runtime 在运行时解释图。Burn ONNX 在编译期把图翻译为可调试的 Rust 源码。区别跟解释器和 AOT 编译器一样。
+## 读前须知
+
+- **Burn ONNX 是什么**：在 `build.rs` 里运行的 **AOT 编译器**——把 ONNX 图翻译为可调试的 Rust 源码（`model.rs`）与权重（`model.bpk`），而非运行时加载 protobuf。
+- **本文定位**：ONNX 编译器专文——以**注意力融合**为 hero pass，展开 IR 流水线、分区与测试体系。Burn 类型栈与融合流见 [blog-burn-summary.md](blog-burn-summary.md)；GPU JIT 见 [blog-cubecl-summary.md](blog-cubecl-summary.md)。
+- **统计基准**：下文测试数字来自 `burn-onnx` 仓库 `crates/onnx-official-tests/expectations.toml`（ONNX v1.19.0，1615 条）；可用 [README 复验脚本](README.md#源码版本与数字校验) 刷新。
+
+### 三篇分工
+
+| 层次 | 文档 | 本文覆盖 |
+|------|------|---------|
+| 构建期 | **本文** | IR 流水线、codegen、测试 |
+| 编译期 | [Burn 地图](blog-burn-summary.md) | 生成代码走 `Autodiff<Fusion<…>>` |
+| 运行期 | Burn 地图 §五 | Fusion drain → burn-cubecl |
+| GPU | [CubeCL 篇](blog-cubecl-summary.md) | JIT + autotune |
 
 ---
 
-**同一张图，两种命运。**
+## 核心结论（读正文前的 spoiler）
 
-你在 PyTorch 里训练了一个 Transformer，导出为 ONNX。用 ONNX Runtime 加载它：运行时解析 protobuf，构建内部图表示，为每个节点查表找到 kernel 实现，执行。你的二进制旁边必须带着 `libonnxruntime.so`（30MB+）。
+> Burn ONNX 在**构建期**做运行时 loader 做不到的事：模式匹配（如 SDPA → `Attention`）、常量折叠、分区——输出是普通 Rust，运行时无 ORT、无 protobuf。与 ONNX Runtime 的区别如同 AOT 编译器 vs 解释器。生成代码与手写 Burn 模型走**同一条**融合流与 CubeCL JIT 路径。
 
-用 Burn ONNX 加载它：在 `build.rs` 里调用 `ModelGen::new().input("model.onnx").out_dir("model/").run_from_script()`——**编译结束后**，`model.onnx` 不存在了。取而代之的是 `model.rs`（纯 Rust 源码，包含 struct 定义和 `forward()` 方法）和 `model.bpk`（权重二进制）。你在代码里写下：
+---
 
-```rust
-let model: Model = Model::from_file("model.bpk", &device);
-let output = model.forward(input);
-```
-
-没有图解释器。没有 protobuf。没有运行时查表。`model.forward()` 是你可以在调试器里逐行跟进去的 Rust 函数。你可以设断点看中间张量的值。你可以手动修改生成的代码——比如把某个 `Relu` 换成 `Gelu`，重新编译。
-
-**这就是"AOT 编译 ONNX 模型"的含义。** 它不是"让 Rust 能加载 ONNX"——那是 ONNX Runtime 绑定的做法。它是"让 ONNX 模型变成 Rust"。
-
-代价是，你需要一个真正的编译器。这篇文章解释这个编译器是怎么工作的。
-
-> **与其他文档的关系**：Burn 的类型栈（`Autodiff<Fusion<…>>`）与编译期后端组合见 [blog-burn-summary.md](blog-burn-summary.md)；运行时的融合流调度与 8.2× 框架开销见同文档第五节；CubeCL 的 JIT 与 GPU 代码生成见 [blog-cubecl-summary.md](blog-cubecl-summary.md)。生成出的 `model.rs` 是普通 Burn 代码——它会穿过 `Autodiff<Fusion<…>>` 栈，走融合流，并触发 CubeCL 的 JIT 与 autotune。
+若尚未建立「AOT vs loader」直觉，可先读 [Burn 地图 §七](blog-burn-summary.md#七onnx-入口构建期-aot而非运行时加载)（约 1 分钟）。下面从**最难的 pass** 直接切入。
 
 ---
 
@@ -41,9 +43,9 @@ V ──────────────────────────
 
 对于 ONNX Runtime，这不是问题——运行时就执行这 5 个操作呗。5 次 kernel launch，5 次显存读写中间结果。
 
-对于 Burn ONNX，这**是一个机会**。因为输出的是 Rust 源码而非运行时图，编译器可以在生成代码之前**识别这个模式，把它融合回一个 `Attention` 节点**——直接调用 Burn 的原生注意力实现。Flash Attention（完成后）或高效融合内核，一次 kernel launch，中间结果留在寄存器或共享内存里。
+对于 Burn ONNX，这**是一个机会**。编译器在生成代码之前**识别 SDPA 分解模式，融合为单一 `Attention` 节点**——生成代码调用 Burn 原生注意力，经 [Burn 融合流](blog-burn-summary.md) 与 [CubeK/CubeCL 内核](blog-cubecl-summary.md) 执行，而非 5 次独立 launch 的中间结果读写。
 
-`crates/onnx-ir/src/simplify/coalesce_attention.rs`（1368 行）专门做这一件事。算法：
+`crates/onnx-ir/src/simplify/coalesce_attention.rs`（约 1367 行）专门做这一件事。算法：
 
 1. 找所有 `Softmax` 节点（注意力模式的"锚点"——所有 SDPA 变体都包含它）
 2. 从 Softmax 向后追踪：它的输入应该来自一个可选的 `Add(mask)` → 可选的 `Div/Mul(scale)` → 一个 `MatMul`
@@ -62,24 +64,27 @@ V ──────────────────────────
 
 RF-DETR 的情况特别棘手：K 的 transpose 把 head-split 和 key-transpose 两个操作合并为一次 perm `[0,2,3,1]`（对比 Q 的 `[0,2,1,3]`）。匹配成功后，编译器需要**插入一个修正的 K Transpose** 来恢复标准的 K^T 语义。
 
-这 1368 行的核心价值不是"做了一件事"——是**在编译期做了一件运行时 loader 做不到的事**。ONNX Runtime 不知道"这 5 个操作是一个注意力"——它只看到 5 个独立的操作。Burn ONNX 看到了注意力，因为它是一个编译器。它有时**间**停下来做模式匹配（`build_producer_map`、`build_consumer_map`、`is_single_use` 守卫），因为这一切发生在编译期。
+这 1367 行的核心价值不是"做了一件事"——是**在编译期做了一件运行时 loader 做不到的事**。ONNX Runtime 不知道"这 5 个操作是一个注意力"——它只看到 5 个独立的操作。Burn ONNX 看到了注意力，因为它是一个编译器。它有时间停下来做模式匹配（`build_producer_map`、`build_consumer_map`、`is_single_use` 守卫），因为这一切发生在编译期。
 
-注意力融合让 27 个 `attention_*_expanded` 上游测试从失败变为通过。不是修了 27 个 bug——是一个优化让 27 个测试的生成代码质量飞跃了。
+注意力融合使上游套件中 **62 个 `attention_*_expanded` 测试里有 27 个** 达到 `pass`（`expectations.toml` 统计）。不是修了 27 个独立 bug——是一个 pass 让整类生成代码质量跃升。
 
 ---
 
 ## 支撑这场胜利的流水线
 
-注意力融合只是 8 个简化 pass 中的 1 个。它们运行在 **6 阶段流水线**的第 4 阶段（`onnx-ir/src/pipeline.rs` 驱动）。总览：
+注意力融合只是 **8 个 simplify pass** 中的 1 个（每轮迭代按固定顺序执行，定点循环最多 10 轮，通常 3–5 轮收敛）。它们运行在 **IR 流水线** 的 Phase 4b（`onnx-ir/src/pipeline.rs` 驱动）。总览：
 
 | 阶段 | 模块 | 做什么 |
 |:---:|------|--------|
 | 1 | `initialization` | Protobuf → `RawNode`，常量初始化，mmap 外部权重 |
 | 2 | `node_conversion` | 类型化节点 + `Gemm→Linear` 等早期合并 |
-| 2b | pipeline 内联循环 | RNN 权重的 Slice→Concat 链折叠 |
+| 2b | 早期 constant fold | RNN 权重的 Slice→Concat 链折叠（最多 10 轮） |
 | 3 | `type_inference` | 迭代形状/类型推断，`ScalarTensor` 区分 |
-| 4 | `post_processing` + `simplify` | Identity 消除 + **8 轮定点简化**（含注意力融合） |
-| 5 | `finalization` + codegen | `Node` 枚举 → 220+ 算子生成 `model.rs` |
+| 4 | `post_processing` | Identity 消除等 |
+| 4b | `simplify` | **8 个 pass** 定点简化（含注意力融合） |
+| 5 | `finalization` | 清理、图输出整理 |
+| 6 | `convert_to_graph` | `RawNode` → `Node` 枚举（`pipeline.rs` Phase 6） |
+| — | `burn-onnx` codegen | `ModelGen` / `impl_node_codegen_dispatch!` → `model.rs` |
 
 下面按阶段说明**为什么需要这一步**，而不只是列名字。
 
@@ -101,7 +106,7 @@ PyTorch 导出 RNN 权重时经常 `Slice`→`Concat`→`Unsqueeze` 链来重排
 
 ### 你需要 Phase 4，因为图来自不同框架，各有各的习惯
 
-消除 Identity 节点（`x = Identity(y)`→ 直接替换）。然后运行 8 轮定点简化——除了注意力融合，还有：
+消除 Identity 节点（`x = Identity(y)`→ 直接替换）。然后运行 **8 个 simplify pass** 的定点循环——除了注意力融合，还有：
 
 - **Permute-reshape**：`Shape→Gather→Unsqueeze→Concat→Reshape`→`Transpose`（ONNX 中的维度重排惯用语）
 - **Constant shape**：`Shape(x)→Gather(i)` 静态可解时折叠。**但裸 `Shape(x)` 被故意保留**——模型可能用静态维度导出，运行时接受动态输入
@@ -109,13 +114,13 @@ PyTorch 导出 RNN 权重时经常 `Slice`→`Concat`→`Unsqueeze` 链来重排
 - **Idempotent / Identity element elimination**：`Relu(Relu(x))`→`Relu(x)`，`x+0`→`x`
 - **CSE + Dead code elimination**：合并重复节点，级联清除死节点
 
-### 你需要 Phase 4 是循环，因为 pass 之间有级联
+### 你需要 Phase 4b 是循环，因为 pass 之间有级联
 
 CSE 合并 → 产生死节点 → DCE 清除 → 释放了被死路径独占的常量 → 下一轮 constant folding 折叠那个常量 → 可能暴露新的可 Idempotent 消除。3-5 轮收敛。
 
-### 你需要 Phase 5，因为简化后的图需要变成代码
+### 你需要 codegen，因为简化后的图需要变成 Rust
 
-清理未引用常量 → `RawNode` 转为 `Node` 枚举 → `impl_node_codegen_dispatch!` 宏对 220+ 种算子变体生成 match dispatch。每个算子的 `forward()` 方法生成对应的 Rust 代码。
+Phase 5–6 在 `onnx-ir` 内完成 finalization 与 `RawNode`→`Node` 转换。**Rust 源码生成**在 `burn-onnx` 的 `ModelGen`：`impl_node_codegen_dispatch!` 对 **169 种** `Node` 变体生成 match dispatch（`burn-onnx/src/burn/node_codegen.rs`）。ONNX 算子表（含 Conv1d/2d 等维度别名）见 `SUPPORTED-ONNX-OPS.md`（当前约 **168/209** import 支持）。
 
 ---
 
@@ -129,7 +134,7 @@ SDXL 的 UNet 有上万个节点。全部塞进一个 `forward()` 方法 = Rust 
 2. **贪心选切点**：将图切分为 64-256 节点的子模块，每个窗口内选切分成本最低的位置。
 3. **常量重排**：把常量节点移到它们首个消费者的前面——避免一个权重在开头定义、在 500 个节点后才用，导致被迫跨越多个分区。
 
-SDXL 和 Depth-Pro 的导入因为这 438 行代码才可能。
+SDXL 和 Depth-Pro 的导入因为这 **437 行**（`partition.rs`）才可能。
 
 ---
 
@@ -137,9 +142,18 @@ SDXL 和 Depth-Pro 的导入因为这 438 行代码才可能。
 
 三层测试，从锁死输出到验证数值：
 
-1. **790 个快照测试**：每个 `NodeCodegen` 实现都带着 `insta::assert_snapshot!`——修改代码生成逻辑后，`cargo insta review` 逐行审查生成的 Rust 代码差异
-2. **178 个集成测试**：每个算子用 Python `onnx.reference.ReferenceEvaluator` 生成 ground truth，生成的 Rust 编译执行后逐元素对比
-3. **1615 个上游测试**：ONNX v1.19.0 后端测试套件——717 pass / 179 数值偏差 / 215 编译失败 / 504 代码生成失败。80% 的编译集通过数值比较
+1. **625 个快照测试**（`grep -r 'insta::assert_snapshot' burn-onnx --include '*.rs' | wc -l`）：`NodeCodegen` 分支用 `insta::assert_snapshot!` 锁死生成代码——改逻辑后 `cargo insta review`
+2. **178 个集成测试**（`onnx-tests/tests/` 下 178 个子目录）：Python `onnx.reference.ReferenceEvaluator` 作 ground truth，Rust 逐元素对比
+3. **1615 个上游测试**（ONNX v1.19.0，`expectations.toml`）：
+
+| status | 含义 | 数量（当前） |
+|--------|------|-------------|
+| `pass` | codegen + compile + 数值匹配 | 722 |
+| `fail-compare` | 编译运行但数值偏差 | 179 |
+| `skip-compile` | codegen 成功但 Rust 不编译 | 230 |
+| `skip-codegen` | codegen 失败/拒绝 | 484 |
+
+在**能 codegen 且能编译**的集合（722+179=901）中，约 **80.1%** 数值通过（722/901）。完整 status 语义见 `crates/onnx-official-tests/README.md`。
 
 测试门的一个特别设计：`expectations.toml`（6653 行）声明了**每个测试的期望状态**。如果代码改动让一个 `skip-codegen` 测试突然开始生成代码了，CI 告警——不是因为它坏了，是因为期望需要更新。这防止了无声的回归。
 
@@ -147,7 +161,9 @@ SDXL 和 Depth-Pro 的导入因为这 438 行代码才可能。
 
 ## 代价和收益
 
-代价是 6 阶段流水线 + 8 轮简化 + 220 个算子代码生成 + 3 层测试。160/201 个算子支持，当前 80% 编译通过率——不是 100%。
+代价是 IR 流水线 + 8 pass 简化 + 169 个 Node codegen 变体 + 3 层测试。**168/209** ONNX 算子行 import 支持（约 80%），上游 `pass` 非 100%——见上表。
+
+复验命令见 [README §源码版本与数字校验](README.md#源码版本与数字校验)。
 
 收益不是 "80% 的模型能跑"。收益是"能跑的那些模型，**跑的方式和手写的 Rust 代码没有区别**。"
 
@@ -175,4 +191,17 @@ SDXL 和 Depth-Pro 的导入因为这 438 行代码才可能。
 | [blog-cubecl-plan.md](blog-cubecl-plan.md) | CubeCL 专题写作计划 + 入门引导 | 跟练 GPU kernel |
 | [blog-cubecl-1.md](blog-cubecl-1.md) | CubeCL 专题 1：GELU 走通 launch | 跑第一个 kernel |
 
-*Burn 底层机制系列 · ONNX AOT 编译 · [综合地图](blog-burn-summary.md) · [CubeCL 篇](blog-cubecl-summary.md)*
+---
+
+## 词汇说明表
+
+| 术语 | 简要说明 |
+|------|----------|
+| **AOT 编译器** | 在 `build.rs` 构建期把 ONNX 译为 Rust，非运行时解释 protobuf。 |
+| **coalesce_attention** | 约 1367 行的 simplify pass：SDPA 分解模式 → 单一 `Attention` 节点。 |
+| **8 个 simplify pass** | 每轮迭代按固定顺序执行；定点循环最多 10 轮（`MAX_ITERATIONS`）。 |
+| **expectations.toml** | 1615 条上游测试的声明式 status；见 `onnx-official-tests/README.md`。 |
+| **skip-codegen / skip-compile** | 官方 status 名：codegen 失败 vs 生成 Rust 不编译。 |
+| **分区编译** | 大图切为 64–256 节点子模块（`partition.rs`）。 |
+
+*Burn 底层机制系列 · ONNX AOT 编译 · [综合地图](blog-burn-summary.md) · [CubeCL 篇](blog-cubecl-summary.md) · [系列索引](README.md)*

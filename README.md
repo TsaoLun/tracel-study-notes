@@ -15,19 +15,20 @@
 | **CubeK** | 基于 CubeCL 的成品算子库（matmul、attention、convolution 等） | [tracel-ai/cubek](https://github.com/tracel-ai/cubek) |
 | **Burn-ONNX** | ONNX→Rust AOT 编译器——构建期把模型翻译为可调试的 Rust 源码 | [tracel-ai/burn-onnx](https://github.com/tracel-ai/burn-onnx) |
 
-四个项目形成一条完整链路：
+四个项目形成一条完整链路（两条入口，一条 GPU 出口）：
 
 ```
-用户模型（Rust struct）
-    ↓
-Burn（Autodiff + Fusion + Backend trait）
-Burn-ONNX（ONNX → Rust AOT 编译）
-burn-cubecl → CubeK 内核
-    ↓
-CubeCL（#[cube] + IR + JIT + autotune）
-    ↓
-CUDA / HIP / WGPU / CPU …
+入口 A：手写 Rust 模型 ──→ Burn（Autodiff + Fusion + Backend trait）
+入口 B：ONNX 模型 ──→ build.rs / ModelGen（AOT）──→ 生成的 Rust + bpk ──→ Burn
+                              ↓
+                    burn-cubecl → CubeK 成品算子
+                              ↓
+                    CubeCL（#[cube] + IR + JIT + autotune）
+                              ↓
+                    CUDA / HIP / WGPU / CPU …
 ```
+
+CubeK 算子实现与 Blueprint 纪律见 [blog-cubecl-summary.md](blog-cubecl-summary.md) §Autotune / §CubeK；暂无独立 CubeK 专文。
 
 ---
 
@@ -37,8 +38,8 @@ CUDA / HIP / WGPU / CPU …
 
 | # | 文档 | 主题 | 读完能解释 |
 |:---:|------|------|------------|
-| 地图 | [blog-burn-summary.md](blog-burn-summary.md) | 类型栈 + 融合流 + 8.2× 框架开销 | `Autodiff<Fusion<CubeBackend<CudaRuntime>>>` 每一层做什么；为什么 0.21.0 拿回 8.2× |
-| ONNX | [blog-burn-onnx-summary.md](blog-burn-onnx-summary.md) | ONNX→Rust AOT 编译器 | 6 阶段流水线、注意力融合、SDXL 分区编译 |
+| 地图 | [blog-burn-summary.md](blog-burn-summary.md) | 类型栈 + 融合流 + 框架开销 | `Autodiff<Fusion<CubeBackend<CudaRuntime>>>` 每一层做什么；0.21.0 channel 重构为何消除锁竞争（约 8.2×，见该文脚注） |
+| ONNX | [blog-burn-onnx-summary.md](blog-burn-onnx-summary.md) | ONNX→Rust AOT 编译器 | IR 流水线、注意力融合、分区、三层测试 |
 | GPU | [blog-cubecl-summary.md](blog-cubecl-summary.md) | CubeCL 编译器框架地图 | `#[cube]` 宏展开、SSA 定点循环、autotune、13 种 TileKind |
 
 **建议按地图 → ONNX → GPU 顺序阅读**，每篇约 20–40 分钟。
@@ -75,7 +76,7 @@ tracel-study-notes/
 └── cubek/         (gitignored)    ← tracel-ai/cubek 参考源码
 ```
 
-文档中所有源码引用使用相对于各仓库根的路径（如 `crates/burn-autodiff/src/backend.rs:27`），方便在本地对照阅读。如需跟练，请将对应仓库 clone 到本目录下（确保目录名与 `.gitignore` 中的名称一致）：
+文档中源码引用使用**各仓库根下的路径 + 符号名**（如 `crates/burn-autodiff/src/backend.rs` 中的 `BackendTypes for Autodiff`）；行号仅作近似。如需跟练，请将对应仓库 clone 到本目录下（确保目录名与 `.gitignore` 中的名称一致）：
 
 ```bash
 git clone https://github.com/tracel-ai/burn.git
@@ -86,9 +87,39 @@ git clone https://github.com/tracel-ai/cubek.git
 
 ---
 
+## 三篇分工（避免重复读）
+
+| 层次 | 文档 | 决策何时发生 | 典型机制 |
+|------|------|-------------|---------|
+| **构建期** | [ONNX 篇](blog-burn-onnx-summary.md) | `cargo build` / `build.rs` | AOT：ONNX → `model.rs` + bpk |
+| **编译期** | [Burn 地图](blog-burn-summary.md) | `rustc` 单态化 | `Autodiff<Fusion<…>>` 类型栈 |
+| **运行期调度** | Burn 地图 §五 | 训练/推理 loop | Fusion 流、channel、drain |
+| **GPU 代码生成** | [CubeCL 篇](blog-cubecl-summary.md) | 首次 kernel launch | expand → SSA → NVRTC；autotune |
+
+---
+
+## 源码版本与数字校验
+
+| 仓库 | 文档机制基准 | 说明 |
+|------|-------------|------|
+| **burn** | v0.21.0（融合 channel 重构） | 8.2× 数字对应该版本前后对比 |
+| **burn-onnx** | main | 测试统计以 `expectations.toml` 为准 |
+| **cubecl** / **cubek** | main | TileKind 等以 cubek 源码为准 |
+
+源码引用格式：`crates/…/file.rs` + 符号名；**行号仅作近似**，随版本漂移。跟练前 clone 参考仓库（见上）。
+
+复验 burn-onnx 测试统计（在已 clone 的 `burn-onnx/` 下）：
+
+```bash
+grep -r 'insta::assert_snapshot' burn-onnx --include '*.rs' | wc -l
+grep '^status' burn-onnx/crates/onnx-official-tests/expectations.toml | sort | uniq -c
+```
+
+---
+
 ## 写作约定
 
-- **源码路径写全**：`crates/burn-fusion/src/stream/multi.rs:102`，可直接跳转
+- **源码路径写全**：`crates/burn-fusion/src/stream/multi.rs`（符号 `MultiStream`），行号作近似参考
 - **术语首次出现括号简注**，完整释义在各文档末尾的词汇说明表
 - **系列导航**：每篇末尾有完整导航表，可跳转到任意相关文档
 - **章节末尾有作业**（CubeCL 专题），用于验证理解

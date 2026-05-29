@@ -180,4 +180,4 @@
 | 专题 1 | [blog-cubecl-1.md](blog-cubecl-1.md) | 已修订 |
 | 专题 2–8 | `blog-cubecl-2.md` … | 待写 |
 
-*Burn 底层机制 · CubeCL 专题 · [系列索引](blog-README.md)*
+*Burn 底层机制 · CubeCL 专题 · [系列索引](README.md)*
