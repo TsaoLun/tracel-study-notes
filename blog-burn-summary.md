@@ -1,9 +1,9 @@
-# Burn 不是后端选择器，是编译器：类型栈、融合流与全栈地图
+# Burn：类型栈、融合流与全栈地图
 
 ## 读前须知
 
-- **Burn 是什么**：Tracel 开源的 Rust **深度学习框架**——它的核心不是"又一个 PyTorch 替代"，而是用 Rust 的编译期单态化，把 **正交能力（Autodiff / Fusion / 后端 / 路由）的自由组合** 压进类型系统里。一行 `Autodiff<Fusion<CubeBackend<CudaRuntime>>>` 就是一个完整的深度学习栈。
-- **解决什么问题**：PyTorch 的 autograd 引擎和 CUDA 后端在 C++ 里紧耦合——你没法把 autograd 装到 JAX 上，也没法把 XLA 融合装到纯 PyTorch eager 上。Burn 把每个能力变成一个 trait、组合变成泛型嵌套，编译器在编译期展开所有组合——零虚函数表、零运行时分支。
+- **Burn 是什么**：Tracel 开源的 Rust **深度学习框架**——与其他框架相比，它的设计重心不在 "API 兼容"，而在用 Rust 的编译期单态化把 **正交能力（Autodiff / Fusion / 后端 / 路由）的自由组合** 压进类型系统里。后端能力由类型嵌套表达（如 `Autodiff<Fusion<CubeBackend<CudaRuntime>>>`），而非 `device = "cuda:0"` 式的运行时字符串选择。一行这样的嵌套就是一个完整的深度学习栈。
+- **解决什么问题**：PyTorch 的 autograd 引擎和 CUDA 后端在 C++ 里紧耦合——autograd 引擎不能跨框架复用（PyTorch 的无法装到 JAX 上），XLA 融合也进不了 PyTorch eager 路径。Burn 把每个能力变成一个 trait、组合变成泛型嵌套，编译器在编译期展开所有组合——消解虚函数表，减少运行时 DispatchKey 查表路径。
 - **本文定位**：Burn 底层机制的**综合地图**——覆盖编译期类型栈、运行时融合流与框架开销、ONNX 与 GPU 的**入口指针**（不重复专文细节）。深入 ONNX 编译器见 [blog-burn-onnx-summary.md](blog-burn-onnx-summary.md)；CubeCL JIT 见 [blog-cubecl-summary.md](blog-cubecl-summary.md)。
 - **机制基准**：融合 channel 重构以 **burn v0.21.0** 为叙述锚点；源码行号为近似值，以路径 + 符号名为准。
 - **术语**：*backend decorator*（零大小的 `PhantomData` + trait 委托包装）、*融合流*（操作先入队、延后 drain 才执行）、*JIT*（首次 launch 才编译 kernel）等，下文首次出现会括号简注；完整释义见文末 **[词汇说明表](#词汇说明表)**。
@@ -22,11 +22,11 @@
 
 ## 核心结论（读正文前的 spoiler）
 
-> Burn 用 **Rust trait 系统的编译期单态化**，把深度学习框架最核心的矛盾——**正交能力如何自由组合**——解决在类型层面。`Autodiff<Fusion<CubeBackend<CudaRuntime>>>` 不是字符串配置，是编译期展开的具体类型。CPU 执行到 `tensor.matmul(&other)` 时，指令指针直接跳转到 CUDA 的矩阵乘法实现——中间不存在任何"判断我在哪个后端"的代码。
+> Burn 用 **Rust trait 系统的编译期单态化**，把深度学习框架的一个核心矛盾——**正交能力如何自由组合**——解决在类型层面。`Autodiff<Fusion<CubeBackend<CudaRuntime>>>` 是编译期展开的具体类型，而非运行时解析的字符串配置。CPU 执行到 `tensor.matmul(&other)` 时，指令指针直接跳转到 CUDA 的矩阵乘法实现——中间不存在"判断我在哪个后端"的代码。
 >
 > 运行期，融合流把连续操作推迟合并，通过 **worker channel 替代递归锁** 显著降低框架开销（v0.21.0 相对 v0.20.1，高并发下约 **8.2×**，见 [§五脚注](#融合反而更慢之后)）；CubeCL 在首次 launch 时 JIT 编译 GPU 代码并 autotune 选最优实现（详见 [CubeCL 篇](blog-cubecl-summary.md) 的 comptime / autotune 分界表）。
 >
-> 构建期，Burn ONNX 是一个真正的 **AOT 编译器**——把 ONNX 模型在 `build.rs` 里翻译为可调试的 Rust 源码，不依赖 ONNX Runtime 共享库。
+> 构建期，Burn ONNX 是在 `build.rs` 里运行的 **AOT 编译器**——把 ONNX 模型翻译为可调试的 Rust 源码，不依赖 ONNX Runtime 共享库。
 
 ---
 
@@ -47,13 +47,13 @@ Autodiff<Fusion<CubeBackend<CudaRuntime>>>
 
 三层泛型嵌套。每一层各自实现 `Backend` trait，把调用委托给内层。组合方式是**编译期确定的类型级联**，不是 `device = "cuda:0"` 那样的运行时字符串。
 
-**这件事的后果比你想象的严重。**
+**这个选择的实际影响比表面看起来更深。**
 
-因为这是类型，所以编译器知道你在训练时用了自动微分、算子融合、CUDA——它会在编译期把所有层展开为一个扁平的具体类型。没有虚函数表，没有运行时分支，没有字符串 hash 查找。
+因为这是类型，所以编译器知道你在训练时用了自动微分、算子融合、CUDA——它会在编译期把所有层展开为一个扁平的具体类型。没有虚函数表，没有字符串 hash 查找，DispatchKey 查表路径被编译期消解。
 
-因为这是嵌套，所以任何组合都是合法的。`Autodiff<Fusion<Wgpu>>`（训练，Vulkan 后端）？合法。`Fusion<CubeBackend<CudaRuntime>>`（纯推理，CUDA）？合法。还有 `BackendRouter` 层（`burn-router`），把不同操作分配到不同后端——大矩阵乘走 GPU，小激活走 CPU。**decorator 可自由嵌套**，`burn-dispatch` 用 `DispatchDevice` 枚举 + 静态 match 消解用户侧泛型——不是「4×6=24 份手写实现」，而是 trait 组合在编译期展开。
+因为这是嵌套，所以任何组合都是合法的。`Autodiff<Fusion<Wgpu>>`（训练，Vulkan 后端）？合法。`Fusion<CubeBackend<CudaRuntime>>`（纯推理，CUDA）？合法。还有 `BackendRouter` 层（`burn-router`），把不同操作分配到不同后端——大矩阵乘走 GPU，小激活走 CPU。**decorator 可自由嵌套**，`burn-dispatch` 用 `DispatchDevice` 枚举 + 静态 match 消解用户侧泛型——不依赖「4×6=24 份手写实现」，而是 trait 组合在编译期展开。
 
-> **术语**：Burn 源码里把 `Autodiff<B>`、`Fusion<B>` 称为 *backend decorator*——本质是 `PhantomData` + trait 委托的**零大小包装**，不是运行时给张量对象再包一层。下文「层」均指类型栈里的一环。
+> **术语**：Burn 源码里把 `Autodiff<B>`、`Fusion<B>` 称为 *backend decorator*——本质是 `PhantomData` + trait 委托的**零大小包装**，编译期标记，运行时无额外内存分配。下文「层」均指类型栈里的一环。
 
 ---
 
@@ -68,7 +68,7 @@ tensor = tensor.to(device)
 
 背后是一个运行时 Dispatch Key 系统。`"cuda:0"` 被映射为 `DispatchKey::CUDA`，运行时查虚函数表找到 kernel 实现。灵活，但所有决策都在运行时——每个操作都要走一次查表。
 
-Burn 面对的问题更复杂。不是"有几个后端可供选择"，而是"有几组**正交的能力**需要自由组合"：
+Burn 面对的问题更复杂。不在于"有几个后端可供选择"——而是几组**正交的能力**需要自由组合：
 
 | 能力 | 训练需要 | 推理需要 | 解释 |
 |------|----------|----------|------|
@@ -115,7 +115,7 @@ pub trait BackendTypes {
 }
 ```
 
-**浮点、整数、布尔、量化——四种张量，四种独立的关联类型。** 这不是学究气的分类。这是整个类型包装能工作的前提。
+**浮点、整数、布尔、量化——四种张量，四种独立的关联类型。** 这种分类是类型包装能工作的前提。
 
 原因马上揭晓。
 
@@ -133,7 +133,7 @@ pub struct Autodiff<B, C = NoCheckpointing> {
 
 两个 `PhantomData`。`Autodiff<B>` 在运行时**不占任何内存**——编译期标记：把 `Backend` 委托给 `B`，仅在浮点张量外跟踪梯度。
 
-关键在于它对 `BackendTypes` 的实现（`crates/burn-autodiff/src/backend.rs`，`impl … BackendTypes for Autodiff`，约 line 27）：
+以它对 `BackendTypes` 的实现为例（`crates/burn-autodiff/src/backend.rs`，`impl … BackendTypes for Autodiff`，约 line 27）：
 
 ```rust
 impl<B: Backend, C: CheckpointStrategy> BackendTypes for Autodiff<B, C> {
@@ -146,7 +146,7 @@ impl<B: Backend, C: CheckpointStrategy> BackendTypes for Autodiff<B, C> {
 
 **只有浮点张量被包装。整数、布尔、量化张量全部透传。**
 
-这就是 `BackendTypes` 把四种张量分家的原因。若共用一个 `TensorPrimitive`，`Autodiff` 只能全包或全不包——要么给整数也建梯度图（无意义），要么绕开自动微分。
+这解释了 `BackendTypes` 为何把四种张量分家。若共用一个 `TensorPrimitive`，`Autodiff` 只能全包或全不包——要么给整数也建梯度图（无意义），要么绕开自动微分。
 
 `AutodiffTensor<B>` 的内部结构：
 
@@ -363,7 +363,7 @@ Burn 的 ONNX 支持不是运行时「加载 `.onnx` 再解释执行」——而
 - 编译期发现图错误，而非运行时 crash
 - 模型作为可 diff 的 Rust 源码管理（与 [ONNX AOT](blog-burn-onnx-summary.md) 导入衔接）
 
-对这些场景，**编译期类型栈 + 运行时融合流 + 构建期 AOT** 不是过度设计——是在 Rust 里同时拿到「多后端 + 零运行时 dispatch 开销 + 无外部运行时依赖」的可行路径。
+对这些场景，**编译期类型栈 + 运行时融合流 + 构建期 AOT** 不一定是过度设计：它在 Rust 里同时拿到「多后端 + 低运行时 dispatch 开销 + 无外部运行时依赖」。
 
 ---
 
@@ -423,7 +423,7 @@ GPU 执行
 | **Backend decorator** | `Autodiff<B>`、`Fusion<B>` 等零大小包装：`PhantomData` + trait 委托，编译期单态化，运行时无开销。 |
 | **类型栈** | `Autodiff<Fusion<CubeBackend<CudaRuntime>>>` 形式的嵌套泛型，编译器展开为一个扁平具体类型。 |
 | **DispatchDevice** | `burn-dispatch` 的枚举：统一所有后端的 device 类型，用 `dispatch_device!` 宏静态 match，消除用户代码中的泛型传染。 |
-| **单态化** | Rust 编译期为每个具体泛型组合生成一份专用代码，无虚函数表、无运行时分支。 |
+| **单态化** | Rust 编译期为每个具体泛型组合生成一份专用代码，消除虚函数表，减少运行时 DispatchKey 查表。 |
 
 ### 运行时融合流
 
