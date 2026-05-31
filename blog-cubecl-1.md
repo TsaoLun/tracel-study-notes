@@ -274,6 +274,8 @@ builder.build(self.settings.clone())  // → KernelDefinition（仍是 IR 级描
 
 ## 作业
 
+> 可运行骨架见 [homework/ch1-gelu-variants/src/lib.rs](homework/ch1-gelu-variants/src/lib.rs)。`cd homework/ch1-gelu-variants && cargo test -- --nocapture` 即可运行。
+
 1. `input` 改为 8 个元素，分别设 `vector_size = 1` 与 `4`，推导 `CubeDim::new_1d(...)`，用 `--features cpu` 验证。
 2. 在 `gelu_scalar` 里加 `comptime!` 常量，观察无需改 launch 签名即可重跑；对比「增加 `#[comptime] bool` launch 参数」对缓存键的影响（预告第四章）。
 
@@ -281,7 +283,7 @@ builder.build(self.settings.clone())  // → KernelDefinition（仍是 IR 级描
 
 ## 下章预告
 
-**[第二章 · expand：`+` 如何变成 `__expand_add_method`](blog-cubecl-2.md)**（待写）：表达式经 **`IntoExpand` / `NativeExpand` 方法** 再写入 `Scope`，不是字面意义上的「AST 直连 `Operation`」。跟读 `cubecl-macros/src/generate/expression.rs`。
+**[第二章 · expand：`+` 如何变成 `__expand_add_method`](blog-cubecl-2.md)**：表达式经 **`IntoExpand` / `NativeExpand` 两层方法** 再写入 `Scope`——parse 层（Rust AST → `Expression` 枚举）→ generate 层（`Expression` → `__expand_*_method`）。跟读 `cubecl-macros/src/generate/expression.rs`。
 
 ---
 

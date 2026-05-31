@@ -4,3 +4,7 @@ burn/
 burn-onnx/
 cubecl/
 cubek/
+
+# Homework crate build artifacts
+homework/*/target/
+homework/*/Cargo.lock

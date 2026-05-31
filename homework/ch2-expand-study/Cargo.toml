@@ -1,0 +1,9 @@
+[package]
+name = "ch2-expand-study"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+cubecl = { path = "../../cubecl/crates/cubecl", features = ["cpu"] }
+half = "2"

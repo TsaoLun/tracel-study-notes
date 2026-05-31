@@ -1,6 +1,6 @@
 # CubeCL 专题写作计划
 
-> 本专题在 [Burn 底层机制系列 · 第四篇](blog-cubecl-summary.md)（鸟瞰：expand、SSA、autotune、CubeK）之后，按**可跟练、可对照源码**的顺序拆章。  
+> 本专题在 [CubeCL GPU 地图](blog-cubecl-summary.md)（鸟瞰：expand、SSA、autotune、CubeK）之后，按**可跟练、可对照源码**的顺序拆章。  
 > **读计划前**：若你从未跑过 CubeCL，可先读 [summary 读前须知](blog-cubecl-summary.md#读前须知) 或下方「入门引导」，再打开 [第一章](blog-cubecl-1.md)。
 
 ---
@@ -64,7 +64,7 @@
 | 章 | 文件 | 标题 | 读完能做什么 | 核心源码锚点 |
 |:---:|------|------|--------------|--------------|
 | 1 | [blog-cubecl-1.md](blog-cubecl-1.md) | 用 GELU 走通一条 launch | Host launch、`GeluArray::define`、`KernelBuilder.scope` | `examples/gelu/`、`launch.rs`、`kernel.rs`（`define_body`）、`compute/builder.rs` |
-| 2 | blog-cubecl-2.md | expand：`+` → `__expand_*_method` → IR | 理解 **NativeExpand 间接层**，而非「表达式直连 Operation」 | `generate/expression.rs`、`generate/kernel.rs` |
+| 2 | [blog-cubecl-2.md](blog-cubecl-2.md) | expand：`+` → `__expand_*_method` → IR | 理解 **NativeExpand 间接层**，而非「表达式直连 Operation」 | `generate/expression.rs`、`generate/kernel.rs` |
 | 3 | blog-cubecl-3.md | trait / impl 与 `#[define]` | `Float` 泛型 kernel、`__expand_{method}`、CubeK 常见签名 | `parse/cube_trait.rs`、`parse/cube_impl.rs`、`generate/cube_trait.rs` |
 | 4 | blog-cubecl-4.md | comptime 与 JIT 缓存键 | `#[comptime]`、`comptime!`、多份 JIT 产物 | `parse/kernel.rs`、`parse/statement.rs`、`generate/kernel.rs`（`KernelId`）；参考 book `core-features/comptime.md` |
 | 5 | blog-cubecl-5.md | 拓扑与四轴 | `ABSOLUTE_POS`、`PLANE_DIM`、launch 与硬件映射 | `frontend/topology.rs`、`cubecl-cpp/.../kernel.rs` |
@@ -88,12 +88,12 @@
 - [x] 区分 `KernelDefinition`（`build`）与 **cubecl-opt + 后端 codegen**（真正「编译」）
 - [x] 预告 `#[define]`（第二章/第三章）
 
-### 第二章（待写）
+### 第二章（已写）
 
-- `IntoExpand::into_expand` → `__expand_add_method` 等（`expression.rs` ~63）
-- 方法内部才向 `Scope` 注册 `Operation`（**两层，非直连**）
-- `if` / 短路 `&&` `||` 的 expand 路径各一例
-- 可选：`create_dummy_kernel` 只看 IR
+- [x] `IntoExpand::into_expand` → `__expand_add_method` 等（`expression.rs` ~63）
+- [x] 方法内部才向 `Scope` 注册 `Operation`（**两层，非直连**）
+- [x] `if` / 短路 `&&` `||` 的 expand 路径各一例
+- [x] `create_dummy_kernel` 只看 IR
 
 ### 第三章（待写，新增）
 
@@ -165,8 +165,8 @@
 
 | 状态 | 文档 |
 |------|------|
-| ✅ 已更新 | `blog-cubecl-plan.md`（本文件）、`blog-cubecl-1.md`（修订） |
-| 📋 待写 | `blog-cubecl-2.md` … `blog-cubecl-8.md` |
+| ✅ 已更新 | `blog-cubecl-plan.md`（本文件）、`blog-cubecl-1.md`（修订）、`blog-cubecl-2.md` |
+| 📋 待写 | `blog-cubecl-3.md` … `blog-cubecl-8.md` |
 | 📎 地图 | `blog-cubecl-summary.md` |
 
 ---
@@ -178,6 +178,7 @@
 | 地图 | [blog-cubecl-summary.md](blog-cubecl-summary.md) | 已发布 |
 | 计划 | **本文** | 已更新 |
 | 专题 1 | [blog-cubecl-1.md](blog-cubecl-1.md) | 已修订 |
-| 专题 2–8 | `blog-cubecl-2.md` … | 待写 |
+| 专题 2 | [blog-cubecl-2.md](blog-cubecl-2.md) | 已发布 |
+| 专题 3–8 | `blog-cubecl-3.md` … | 待写 |
 
 *Burn 底层机制 · CubeCL 专题 · [系列索引](README.md)*

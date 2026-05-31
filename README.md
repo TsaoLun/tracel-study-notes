@@ -38,11 +38,21 @@ CubeK 算子实现与 Blueprint 纪律见 [blog-cubecl-summary.md](blog-cubecl-s
 
 | # | 文档 | 主题 | 读完能解释 |
 |:---:|------|------|------------|
-| 地图 | [blog-burn-summary.md](blog-burn-summary.md) | 类型栈 + 融合流 + 框架开销 | `Autodiff<Fusion<CubeBackend<CudaRuntime>>>` 每一层做什么；0.21.0 channel 重构为何消除锁竞争（约 8.2×，见该文脚注） |
+| 地图 | [blog-burn-summary.md](blog-burn-summary.md) | 类型栈 + 融合流 + 框架开销 | `Autodiff<Fusion<CubeBackend<CudaRuntime>>>` 每一层做什么；0.21.0 channel 重构为何消除锁竞争 |
 | ONNX | [blog-burn-onnx-summary.md](blog-burn-onnx-summary.md) | ONNX→Rust AOT 编译器 | IR 流水线、注意力融合、分区、三层测试 |
 | GPU | [blog-cubecl-summary.md](blog-cubecl-summary.md) | CubeCL 编译器框架地图 | `#[cube]` 宏展开、SSA 定点循环、autotune、13 种 TileKind |
 
-**建议按地图 → ONNX → GPU 顺序阅读**，每篇约 20–40 分钟。
+**建议按地图 → ONNX → GPU 顺序阅读**，每篇约 15–25 分钟。
+
+### 文档类型
+
+| 类型 | 职能 | 例子 |
+|------|------|------|
+| **summary（地图）** | 心智模型 + 架构连接 + 设计动机。读完知道"为什么这么设计"和各组件如何协作。不逐机制展开。 | burn / onnx / cubecl 三篇 summary |
+| **plan** | 写作计划 + 跟练入口 | blog-cubecl-plan |
+| **chapter（章节）** | 跟练教程、逐机制展开、带作业 | blog-cubecl-1（及后续） |
+
+读 summary 建立全局视图，读 chapter 跟练具体机制。
 
 ### 专题：CubeCL 编译器（跟练 + 写作计划）
 
@@ -50,7 +60,8 @@ CubeK 算子实现与 Blueprint 纪律见 [blog-cubecl-summary.md](blog-cubecl-s
 |:---:|------|------|------|
 | 计划 | [blog-cubecl-plan.md](blog-cubecl-plan.md) | 8 章写作计划 + 入门引导 | 了解专题结构、GPU 新人入门指引 |
 | 1 | [blog-cubecl-1.md](blog-cubecl-1.md) | GELU 走通一条 launch | 跑通 `cargo run --example gelu --features cpu`，理解 Host 与 kernel 两层世界 |
-| 2–8 | 待写 | expand、trait、comptime、拓扑、JIT、autotune、CubeK/Burn | 见 [计划表](blog-cubecl-plan.md#章节目录) |
+| 2 | [blog-cubecl-2.md](blog-cubecl-2.md) | expand：`+` → `__expand_add_method` → IR | 理解 `IntoExpand`/`NativeExpand` 两层，表达式如何向 Scope 注册 Operation |
+| 3–8 | 待写 | trait、comptime、拓扑、JIT、autotune、CubeK/Burn | 见 [计划表](blog-cubecl-plan.md#章节目录) |
 
 CubeCL 专题假设你会 Rust，不要求写过 CUDA/WGSL。每章有可运行的锚点示例、源码路径、作业。
 
@@ -69,6 +80,11 @@ tracel-study-notes/
 ├── blog-cubecl-summary.md         ← CubeCL 编译器地图
 ├── blog-cubecl-plan.md            ← CubeCL 专题写作计划
 ├── blog-cubecl-1.md               ← CubeCL 专题 1：GELU launch
+├── blog-cubecl-2.md               ← CubeCL 专题 2：expand 机制
+│
+├── homework/                       ← 作业跟练骨架代码
+│   ├── README.md
+│   └── ch2-expand-study.rs
 │
 ├── burn/          (gitignored)    ← tracel-ai/burn 参考源码
 ├── burn-onnx/     (gitignored)    ← tracel-ai/burn-onnx 参考源码
@@ -102,7 +118,7 @@ git clone https://github.com/tracel-ai/cubek.git
 
 | 仓库 | 文档机制基准 | 说明 |
 |------|-------------|------|
-| **burn** | v0.21.0（融合 channel 重构） | 8.2× 数字对应该版本前后对比 |
+| **burn** | v0.21.0（融合 channel 重构） | channel 重构对应该版本 |
 | **burn-onnx** | main | 测试统计以 `expectations.toml` 为准 |
 | **cubecl** / **cubek** | main | TileKind 等以 cubek 源码为准 |
 
