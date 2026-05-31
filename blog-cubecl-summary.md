@@ -54,7 +54,7 @@ Rust 函数 + #[cube] → proc-macro 生成 expand 模块
 
 `comptime! { … }` 里的代码在 expand 执行时作为普通 Rust 运行，结果烘焙进 IR 常量——与 Rust `const` 不同（后者在 `cargo build` 时固定）。
 
-测试 kernel 的常见路径：CPU runtime launch（`--features cpu`），或用 `#[cube(create_dummy_kernel)]` 生成 IR 而不真正 launch。
+测试 kernel 的常见路径：CPU runtime launch（`--features cpu`），或对 `#[cube(launch)]` kernel 调用 **`{Name}Kernel::new` + `define()`** 打印 Scope（不 launch）。
 
 ---
 

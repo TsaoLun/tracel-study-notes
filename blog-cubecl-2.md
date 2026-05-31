@@ -1,7 +1,7 @@
 # CubeCL 专题 · 第二章：expand——`+` 如何变成 `__expand_add_method`
 
 > **本章锚点**：GELU 示例中 `x / Vector::new(sqrt2)` 这行代码，从 Rust 语法树到 IR 里的 `Operation::Arithmetic(Div, …)`，中间经过两层转换。  
-> **读完能干什么**：能读 `cubecl-macros/src/generate/expression.rs` 中的 `Expression::to_tokens` 匹配臂，解释为什么表达式不是「AST 直连 Operation」；能用 `create_dummy_kernel` 打印 IR。
+> **读完能干什么**：能读 `cubecl-macros/src/generate/expression.rs` 中的 `Expression::to_tokens` 匹配臂，解释为什么表达式不是「AST 直连 Operation」；能用 `ArithKernel::define()` 打印 expand 生成的 Scope。
 
 > **前置**：[第一章](blog-cubecl-1.md)（launch 调用链、`expand` 何时被调用）。术语见 [summary 词汇表](blog-cubecl-summary.md#词汇说明表)。
 
@@ -300,23 +300,33 @@ Expression::Binary {
 
 ---
 
-## `create_dummy_kernel`：只看 IR，不 launch
+## 只看 IR，不 launch：`define()`
 
-CubeCL 提供 `#[cube(create_dummy_kernel)]` 属性，跳过 GPU 编译和执行，只生成 IR 并打印。对理解 expand 输出非常有用。
+跟练时不必走完整 launch 管线。宏为每个 `#[cube(launch)]` kernel 生成 **`{Name}Kernel` 结构体** 与 **`CubeKernel::define()`**——在 Host CPU 上运行 `expand`，把指令填入 `Scope`，**不提交后端编译**。
 
-用法（在 `#[cube(launch)]` 函数上添加 `create_dummy_kernel` 参数）：
+跟练骨架（`homework/ch2-expand-study/`）用法：
 
 ```rust
-#[cube(launch, create_dummy_kernel)]
-fn my_add<F: Float>(x: F, y: F) -> F {
-    x + y
-}
+use cubecl::prelude::*;
 
-// 生成 my_add::create_dummy_kernel(CubeCount, CubeDim, /* … */) → MyAdd
-// 返回的 MyAdd 实现了 CubeKernel::define()，可在其上调用 define() 得到 KernelDefinition 查看 IR
+let client = cubecl::cpu::CpuRuntime::client(&Default::default());
+let settings = KernelSettings::default().cube_dim(CubeDim::new_1d(1));
+
+let kernel = arith_kernel::ArithKernel::<f32, cubecl::cpu::CpuRuntime>::new(
+    settings,
+    client,
+    BufferCompilationArg { inplace: None }, // 每个 buffer 参数各一份
+    BufferCompilationArg { inplace: None },
+    BufferCompilationArg { inplace: None },
+    BufferCompilationArg { inplace: None },
+);
+
+println!("{}", kernel.define().body); // Scope 实现了 Display
 ```
 
-`create_dummy_kernel` 生成的是创建 kernel 结构体的函数（而非直接 dump IR）。拿到 kernel 实例后，调用 `.define()` 得到 `KernelDefinition`，即可检查 `expand` 填入 Scope 的指令。
+宏还支持 `#[cube(launch, create_dummy_kernel)]`，会额外生成 `create_dummy_kernel(...)` 辅助函数；但 **`define()` 仍需要带 `device_properties` 的 `ComputeClient`**，跟练时直接 `ArithKernel::new` + `define()` 更直观。
+
+CubeCL 还提供 `#[cube(create_dummy_kernel)]` 属性（见 `cubecl-macros` 文档），用于测试 harness——与上述 `define()` 路径目的一致。
 
 ---
 
@@ -347,14 +357,14 @@ Expression::FunctionCall { func, args, associated_type: None, .. } => {
 
 ## 作业
 
-> 可运行骨架见 [homework/ch2-expand-study.rs](homework/ch2-expand-study.rs)。复制到 `cubecl/examples/expand-study/src/lib.rs` 后按 `todo!()` 完成。
+> 可运行骨架：[homework/ch2-expand-study/](homework/ch2-expand-study/)（`cd homework/ch2-expand-study && cargo test -- --nocapture`）。
 
-1. 在 `cubecl-macros/src/generate/expression.rs` 中找到 `Expression::FunctionCall` 和 `Expression::MethodCall` 的处理分支，写一段注释说明两者展开方式的差异。（提示：方法调用用 `__expand_{method}_method`，函数调用用 `{path}::expand`。）
+1. 在 `cubecl-macros/src/generate/expression.rs` 中找到 `Expression::FunctionCall`（两个匹配臂）和 `Expression::MethodCall` 的处理分支，写一段注释说明两者展开方式的差异。（提示：自由函数用 `{path}::expand` 或 `__expand_{name}`；方法调用用 `receiver.__expand_{method}_method`。）
 
-2. 使用 `#[cube(create_dummy_kernel)]` 写一个包含 `a + b * c` 的 kernel，打印 IR，找出：
-   - `mul` 操作对应的 `Operation`
-   - `add` 操作对应的 `Operation`
-   - 输出变量是如何关联的（谁的结果传给谁）
+2. 在骨架中补全/运行 `a + b * c` kernel：
+   - **步骤一** `homework_2_verify`：CPU launch 验证 `2 + 3 × 4 = 14`
+   - **步骤二** `homework_2_ir_dump`：`ArithKernel::new` + `define()` 打印 Scope，找出 `*`（`binding(25)` mul）先于 `+`（`binding(26)` add），以及 `binding(25)` 如何传给 add
+   - **步骤三** `homework_2_ir_analysis`：阅读概念题参考答案
 
 3. （选做）跟踪 `into_expand` 在 `cubecl-core/src/frontend/element/base.rs` 中的 trait 定义。列出至少 3 种实现了 `IntoExpand` 的类型，说明它们各自 `into_expand` 的行为差异。
 

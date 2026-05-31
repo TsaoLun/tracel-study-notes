@@ -93,7 +93,7 @@
 - [x] `IntoExpand::into_expand` → `__expand_add_method` 等（`expression.rs` ~63）
 - [x] 方法内部才向 `Scope` 注册 `Operation`（**两层，非直连**）
 - [x] `if` / 短路 `&&` `||` 的 expand 路径各一例
-- [x] `create_dummy_kernel` 只看 IR
+- [x] `ArithKernel::define()` 只看 Scope（不 launch）
 
 ### 第三章（待写，新增）
 
