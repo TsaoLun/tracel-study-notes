@@ -345,6 +345,24 @@ Expression::FunctionCall { func, args, associated_type: None, .. } => {
 
 ---
 
+## 本章决策时机
+
+本章的核心机制是**两层转换**。每层的决策时机不同：
+
+| 决策 | 时机 | 在哪个 crate |
+|------|------|-------------|
+| Rust AST → `Expression` 枚举（parse） | proc-macro 展开时（`cargo build`） | `cubecl-macros` |
+| 编译期常量折叠（`left.is_const() && right.is_const()`） | proc-macro 展开时（`cargo build`） | `cubecl-macros`（parse 层） |
+| `&&` / `||` 消解为 if/else | proc-macro 展开时（`cargo build`） | `cubecl-macros`（generate 层） |
+| `Expression` → `__expand_*_method` 调用（generate） | proc-macro 展开时（`cargo build`） | `cubecl-macros`（generate 层） |
+| `__expand_*_method` 实际执行 → `scope.register(Instruction(...))` | 首次 JIT miss 时（`define()` 内） | `cubecl-core`（host CPU 上执行） |
+| `binary_expand` 分配输出 Variable | 首次 JIT miss 时 | `cubecl-core` |
+| `Operation::Branch(...)` 注册 | 首次 JIT miss 时 | `cubecl_ir::branch` |
+
+**关键洞察**：proc-macro 做的事（两层转换）和 expand 做的事（注册 Instruction）发生在**完全不同的时间**。proc-macro 在 `cargo build` 时就完成了——它生成了一段 Rust 代码（`__expand_add_method` 调用链）。这段代码在首次 launch 的 JIT miss 时才真正执行，向 `Scope` 注册 `Instruction`。理解这个时间差，就理解了为什么 `comptime!` 里的代码能在 expand 执行时读取当前硬件属性——它运行在 JIT 编译的 host 端，不是 `cargo build` 时。
+
+---
+
 ## 小结
 
 1. **两层转换**：parse 层（Rust AST → `Expression` 枚举）→ generate 层（`Expression` → `__expand_*_method` 调用）。proc-macro 不直接把 AST 节点翻译为 IR Operation。

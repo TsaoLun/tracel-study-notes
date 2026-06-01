@@ -349,6 +349,56 @@ Fusion 层拿到 buffer handle 后，通过 `client.register_tensor_handle(handl
 
 ---
 
+## 读张量时，drain 才发生：`FusionServer::read_float`
+
+前面的 `println!("{}", z)` 触发读张量。一路走到 `FusionServer::read_float`——它揭示了 drain 的精确时机（`burn/crates/burn-fusion/src/server.rs`）：
+
+```rust
+pub fn read_float<B>(&mut self, tensor: TensorIr, id: StreamId) -> B::FloatTensorPrimitive
+where
+    B: FusionBackend<FusionRuntime = R>,
+{
+    // Make sure all registered operations are executed.
+    // The underlying backend can still be async.
+    self.drain_stream(id);
+    let tensor_float = self.handles.get_float_tensor::<B>(&tensor);
+    self.streams.mark_read(id, &tensor, &self.handles);
+    tensor_float
+}
+```
+
+三步：**drain → 查 handle 表 → mark_read**。`drain_stream` 触发 `MultiStream::drain`（第三章展开），排空流中所有待执行操作。`mark_read` 记录"此 tensor 已被读过"，后续的读操作可跳过重复 drain。
+
+### 跨流共享：`tag_shared_view`
+
+`MultiStream` 的文档注释（`burn/crates/burn-fusion/src/stream/multi.rs`）描述了跨流 tensor 共享的完整策略（第八章展开，此处只给结构）：
+
+1. **探测跨流**：当 `FusionTensor::clone` 检测到 `self.stream != StreamId::current()` 时，分配新 `TensorId`（`dst`），调用 `tag_shared_view(src_stream, src, dst)`。
+2. **物化源 tensor**：若 `src` 的 handle 尚未注册，先 drain `src_stream` 强制执行。记录 `src` 到 `shared_sources`，后续同源共享跳过 drain——handle 一旦注册便不移动。
+3. **别名 handle**：`HandleContainer::register_handle(dst, src_handle.clone())`——CubeCL handle 是 `Arc` 式引用计数，`clone()` 廉价。
+4. **返回新 tensor**：`(id = dst, stream = current)`——后续 ops 入队当前流，fusion 引擎看不到特殊 case。
+
+`shared_sources` 的清理在 `register` 中：一旦看到 `OperationIr::Drop(id)` 入队，立即从集合中移除 `id`——不等 `Drop` 真正执行。
+
+---
+
+## 本章决策时机
+
+本章覆盖的每项机制都有明确的决策时机。理解"什么决定在什么时候做出"是理解 Fusion 设计的关键：
+
+| 决策 | 时机 | 在哪做 | 谁决定 |
+|------|------|--------|--------|
+| 后端类型栈（如 `Fusion<CubeBackend<WgpuRuntime>>`） | `cargo build`（rustc 单态化） | 用户 Cargo.toml feature 选择 | 开发者 |
+| GPU buffer 分配 | `from_data` 调用时（立即） | CubeCL `MemoryManager::reserve` | 框架 |
+| Fusion 操作入队 | 每次 tensor 操作时（立即入队） | `GlobalFusionClient::register` → `submit()` fire-and-forget | 框架 |
+| 操作融合成 kernel | drain 时（读张量触发） | `MultiStream::drain` → `Processor::process` | Policy/Explorer |
+| kernel 提交给 GPU | drain 后立即 | CubeCL `ComputeClient::launch` | 框架 |
+| GPU kernel JIT 编译 | 首次遇该 kernel 签名时 | CubeCL runtime compiler（见 CubeCL 专题） | 框架 |
+
+两层 client-server 架构的核心后果：**Fusion 层推迟的是"操作如何合并"（运行期决策），CubeCL 层管理的是"内存在哪、kernel 何时跑"（立即执行）。** 两条链路的流水线并行来自 `DeviceServiceStage::Upstream`——Fusion 处理下一批 op 的同时，CubeCL 在编译/执行上一批的结果。
+
+---
+
 ## 常见误区
 
 | 误区 | 事实 |

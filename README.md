@@ -46,19 +46,34 @@
 
 ```
 docs/
-├── burn/                        ← Burn 框架底层机制
-│   ├── summary.md               （地图）类型栈 + 融合流 + 框架开销
-│   ├── onnx-summary.md          （地图）ONNX→Rust AOT 编译器
-│   └── fusion/                  ← Burn Fusion 运行时专题
-│       ├── index.md             （计划）8 章写作计划 + 入门引导
-│       └── 1-client-server.md   （章节）双客户端-服务器：from_data → GPU buffer
+├── architecture.md                ← （地图）跨项目架构主线：决策推迟
 │
-└── cubecl/                      ← CubeCL 编译器
-    ├── summary.md               （地图）#[cube] 宏展开、SSA、autotune
-    ├── index.md                 （计划）8 章写作计划 + 入门引导
-    ├── 1-gelu-launch.md         （章节）GELU 走通一条 launch
-    └── 2-expand.md              （章节）expand：+ → __expand_add_method → IR
+├── burn/                          ← Burn 框架底层机制
+│   ├── summary.md                 （地图）类型栈 + 融合流 + 框架开销
+│   ├── onnx-summary.md            （地图）ONNX→Rust AOT 编译器
+│   ├── autodiff/
+│   │   └── summary.md             （地图）选择性包装 + 梯度图 + Checkpointing
+│   ├── fusion/                    ← Burn Fusion 运行时专题
+│   │   ├── index.md               （计划）8 章写作计划 + 入门引导
+│   │   └── 1-client-server.md     （章节）双客户端-服务器：from_data → GPU buffer
+│   └── onnx/                      ← Burn ONNX 专题
+│       └── index.md               （计划）6 章写作计划 + 入门引导
+│
+├── cubecl/                        ← CubeCL 编译器
+│   ├── summary.md                 （地图）#[cube] 宏展开、SSA、autotune
+│   ├── index.md                   （计划）8 章写作计划 + 入门引导
+│   ├── 1-gelu-launch.md           （章节）GELU 走通一条 launch
+│   └── 2-expand.md                （章节）expand：+ → __expand_add_method → IR
+│
+└── cubek/                         ← CubeK 算子库
+    └── summary.md                 （地图）Blueprint-Routine-Autotuner 三层纪律
 ```
+
+### 跨项目
+
+| 类型 | 文档 | 主题 |
+|------|------|------|
+| 地图 | [architecture.md](docs/architecture.md) | 决策推迟：编译期 → JIT 时 → 首次执行——四项目共性 |
 
 ### Burn
 
@@ -66,9 +81,12 @@ docs/
 |------|------|------|----------|:---:|
 | 地图 | [summary.md](docs/burn/summary.md) | 类型栈 + 融合流 + 框架开销 | `rustc` 单态化 + 训练 loop | ✅ |
 | 地图 | [onnx-summary.md](docs/burn/onnx-summary.md) | ONNX→Rust AOT 编译器 | `cargo build` / `build.rs` | ✅ |
+| 地图 | [autodiff/summary.md](docs/burn/autodiff/summary.md) | 选择性包装 + 梯度图 + Checkpointing | 前向运行时 + `.backward()` | ✅ |
 | 计划 | [fusion/index.md](docs/burn/fusion/index.md) | Fusion 运行时 8 章写作计划 | — | ✅ |
+| 计划 | [onnx/index.md](docs/burn/onnx/index.md) | ONNX IR 流水线 6 章写作计划 | — | ✅ |
 | 章节 | [fusion/1-client-server.md](docs/burn/fusion/1-client-server.md) | 双客户端-服务器：from_data → GPU buffer | — | ✅ |
 | 章节 | fusion/2-operation-queue.md … fusion/8-cross-stream-channel.md | OperationQueue … channel 重构 | — | 📋 |
+| 章节 | onnx/1-protobuf-to-ir.md … onnx/6-testing-modelgen.md | Protobuf → IR … 测试体系 | — | 📋 |
 
 ### CubeCL
 
@@ -79,6 +97,12 @@ docs/
 | 章节 | [1-gelu-launch.md](docs/cubecl/1-gelu-launch.md) | GELU 走通一条 launch | — | ✅ |
 | 章节 | [2-expand.md](docs/cubecl/2-expand.md) | expand：`+` → `__expand_add_method` → IR | — | ✅ |
 | 章节 | 3-trait-impl.md … 8-cubek-burn.md | trait、comptime、拓扑、JIT、autotune、CubeK/Burn | — | 📋 |
+
+### CubeK
+
+| 类型 | 文档 | 主题 | 决策时机 | 状态 |
+|------|------|------|----------|:---:|
+| 地图 | [cubek/summary.md](docs/cubek/summary.md) | Blueprint-Routine-Autotuner 三层纪律 + TileKind + kernel explosion 预防 | JIT 编译时（L2）+ 首次执行时（L3） | ✅ |
 
 ---
 
@@ -91,24 +115,34 @@ tracel-study-notes/
 ├── .gitignore
 │
 ├── docs/                            ← 所有机制分析文档
+│   ├── architecture.md              ← 跨项目架构主线
 │   ├── burn/
 │   │   ├── summary.md
 │   │   ├── onnx-summary.md
-│   │   └── fusion/
-│   │       ├── index.md
-│   │       └── 1-client-server.md
-│   └── cubecl/
-│       ├── summary.md
-│       ├── index.md
-│       ├── 1-gelu-launch.md
-│       └── 2-expand.md
+│   │   ├── autodiff/
+│   │   │   └── summary.md
+│   │   ├── fusion/
+│   │   │   ├── index.md
+│   │   │   └── 1-client-server.md
+│   │   └── onnx/
+│   │       └── index.md
+│   ├── cubecl/
+│   │   ├── summary.md
+│   │   ├── index.md
+│   │   ├── 1-gelu-launch.md
+│   │   └── 2-expand.md
+│   └── cubek/
+│       └── summary.md
 │
 ├── src/                             ← 示例与作业（Cargo workspace）
 │   ├── Cargo.toml
 │   ├── README.md
 │   ├── burn-test/                   ← Fusion 专题跟练：融合示例
 │   ├── ch1-gelu-variants/           ← CubeCL 专题 1 作业
-│   └── ch2-expand-study/            ← CubeCL 专题 2 作业
+│   ├── ch2-expand-study/            ← CubeCL 专题 2 作业
+│   ├── ch3-trait-study/             ← CubeCL 专题 3 作业（骨架）
+│   ├── fusion-ch2-queue/            ← Fusion 专题 2 作业（骨架）
+│   └── fusion-ch3-drain/            ← Fusion 专题 3 作业（骨架）
 │
 ├── burn/          (gitignored)      ← tracel-ai/burn 参考源码
 ├── burn-onnx/     (gitignored)      ← tracel-ai/burn-onnx 参考源码

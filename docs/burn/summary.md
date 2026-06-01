@@ -242,3 +242,5 @@ GPU 执行
 | NVRTC | NVIDIA Runtime Compiler |
 
 *Burn 底层机制系列 · 综合地图 · 导航见 [README](../../README.md)*
+
+系列内相关：**[Autodiff 地图](autodiff/summary.md)**（选择性包装 + 梯度图 + Checkpointing） · **[ONNX 地图](onnx-summary.md)**（AOT 编译器） · **[跨项目架构](architecture.md)**（决策推迟主线）

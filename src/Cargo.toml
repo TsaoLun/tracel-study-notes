@@ -3,5 +3,8 @@ resolver = "2"
 members = [
     "ch1-gelu-variants",
     "ch2-expand-study",
+    "ch3-trait-study",
     "burn-test",
+    "fusion-ch2-queue",
+    "fusion-ch3-drain",
 ]

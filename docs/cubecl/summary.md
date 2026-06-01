@@ -288,3 +288,5 @@ cudarc launch；ABSOLUTE_POS 写 output
 | AOT | Ahead-of-Time（对比 JIT，见 ONNX 篇） |
 
 *Burn 底层机制系列 · GPU 地图 · 导航见 [README](../../README.md)*
+
+系列内相关：**[CubeK 地图](../cubek/summary.md)**（Blueprint-Routine-Autotuner 三层纪律） · **[Burn 地图](../burn/summary.md)**（类型栈 + 融合流） · **[跨项目架构](../architecture.md)**（决策推迟主线）

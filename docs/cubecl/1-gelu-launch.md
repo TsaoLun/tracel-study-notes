@@ -264,6 +264,24 @@ builder.build(self.settings.clone())  // → KernelDefinition（仍是 IR 级描
 
 ---
 
+## 本章决策时机
+
+本章覆盖的每项机制有明确的决策时机。把这个框架内化后，后续章节的机制才能放在正确的位置：
+
+| 决策 | 时机 | 谁决定 |
+|------|------|--------|
+| `#[cube]` kernel 的 Rust 类型检查 | `cargo build` | rustc |
+| expand 子模块的代码生成（`mod gelu_array { … }`） | `cargo build`（proc-macro 展开） | `cubecl-macros` |
+| `KernelSettings`（cube_dim, vector_size, address_type） | launch 调用时 | 调用者（host 代码） |
+| expand 执行——向 `Scope` 填 `Operation` | 首次 JIT miss 时（`define()` 内） | CubeCL runtime |
+| `builder.build()` → `KernelDefinition` | 首次 JIT miss 时（`define()` 内） | `KernelBuilder` |
+| cubecl-opt + 后端 codegen（PTX/WGSL/SIMD） | 首次 JIT miss 时（compile 路径） | `cubecl-opt` + 各后端 |
+| 磁盘缓存命中 | 同 kernel 键的第二次 launch | `CompilationCache` |
+
+**关键洞察**：你写的 `#[cube]` 函数体既不是 `cargo build` 时编译为 GPU 代码，也不是首次 launch 时直接翻译为 PTX。它是**一段在 JIT 时运行的程序**——执行后向 `Scope` 填入 IR 指令，再由 `cubecl-opt` 和后端编译器处理。这解释了为什么 `comptime!` 可以在 kernel 里做 `2.0f32.sqrt()` —— 它是在 host CPU 上、JIT 编译时执行的普通 Rust 代码。
+
+---
+
 ## 小结
 
 1. **两层世界**：Host 负责 buffer 与 `launch_unchecked`；设备逻辑经 **`GeluArray::define()` → `expand` → `KernelDefinition` → opt/后端**。
