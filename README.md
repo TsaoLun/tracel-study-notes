@@ -68,7 +68,7 @@ docs/
 | 地图 | [onnx-summary.md](docs/burn/onnx-summary.md) | ONNX→Rust AOT 编译器 | `cargo build` / `build.rs` | ✅ |
 | 计划 | [fusion/index.md](docs/burn/fusion/index.md) | Fusion 运行时 8 章写作计划 | — | ✅ |
 | 章节 | [fusion/1-client-server.md](docs/burn/fusion/1-client-server.md) | 双客户端-服务器：from_data → GPU buffer | — | ✅ |
-| 章节 | fusion/2.md … fusion/8.md | OperationQueue … channel 重构 | — | 📋 |
+| 章节 | fusion/2-operation-queue.md … fusion/8-cross-stream-channel.md | OperationQueue … channel 重构 | — | 📋 |
 
 ### CubeCL
 

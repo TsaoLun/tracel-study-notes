@@ -1,6 +1,6 @@
 # Burn Fusion 专题 · 第一章：双客户端-服务器——从 `from_data` 到 GPU buffer
 
-> **本章锚点**：`let tensor = Tensor::<Backend, 2>::from_data([[2., 3.], [4., 5.]], &device)` 这一行代码。  
+> **本章锚点**：`let tensor = Tensor::<2>::from_data([[2., 3.], [4., 5.]], &device)` 这一行代码。  
 > 一次 tensor 创建穿过**两条**独立的 client-server 链路——Fusion 层和 CubeCL 层。Fusion 层把操作推迟入队；CubeCL 层立即在 GPU 上分配 buffer。两条链路通过 `DeviceServiceStage::Upstream` 排成流水线。
 
 > **读者提示**：*Fusion* / *client-server* 等见 [Burn 地图词汇表](../summary.md#词汇说明表)。专题目录见 [index.md](index.md)。
@@ -22,7 +22,7 @@
 
 ## 一分钟跑通：用 `RUST_LOG` 看两层各自干活
 
-在本仓库的 `src/burn-test/` 目录（需先在项目根 clone burn 仓库，见 [README](README.md#仓库结构)）：
+在本仓库的 `src/burn-test/` 目录（需先在项目根 clone burn 仓库，见 [README](../../../README.md#仓库结构)）：
 
 ```bash
 cd src/burn-test
@@ -49,7 +49,7 @@ RUST_LOG=burn_fusion=trace,cubecl_wgpu::runtime=trace cargo run --release
 全程用一个三操作融合示例：
 
 ```rust
-let tensor_1 = Tensor::<Backend, 2>::from_data(
+let tensor_1 = Tensor::<2>::from_data(
     [[2., 3.], [4., 5.]], &device
 );
 let y = tensor_1.clone() * 2.0 + 1.0;  // ScalarMul + ScalarAdd
@@ -57,13 +57,7 @@ let z = y.tanh();                       // Tanh
 println!("{}", z);                       // ← 触发 drain + 融合 + 执行
 ```
 
-其中 `Backend = Wgpu`，展开为：
-
-```rust
-type Wgpu = Fusion<CubeBackend<WgpuRuntime>>;
-```
-
-类型栈是 `Fusion<CubeBackend<WgpuRuntime>>`。`Fusion` 是本章的主角——它把操作推迟到读张量时才执行。`CubeBackend<WgpuRuntime>` 是真正跟 GPU 对话的那层。
+`Device::wgpu(..)` 默认启用 fusion，内部类型栈是 `Fusion<CubeBackend<WgpuRuntime>>`（等价于 `type Wgpu = Fusion<CubeBackend<WgpuRuntime>>`）。`Fusion` 是本章的主角——它把操作推迟到读张量时才执行。`CubeBackend<WgpuRuntime>` 是真正跟 GPU 对话的那层。
 
 ---
 
@@ -227,14 +221,14 @@ Fusion 层和 CubeCL 层的通信不是嵌套锁——是 **worker channel + 流
 回到主示例的第一行：
 
 ```rust
-let tensor_1 = Tensor::<Backend, 2>::from_data([[2., 3.], [4., 5.]], &device);
+let tensor_1 = Tensor::<2>::from_data([[2., 3.], [4., 5.]], &device);
 ```
 
 这行代码涉及两个阶段。
 
 ### 阶段 1：Fusion 层登记 `NoOp`
 
-`Tensor::from_data` 最终调用 `FusionBackend::float_from_data`（实现在 `burn-crates/burn-fusion/src/ops/tensor.rs`）。Fusion 层做两件事：
+`Tensor::from_data` 最终调用 `FusionBackend::float_from_data`（实现在 `burn/crates/burn-fusion/src/ops/tensor.rs`）。Fusion 层做两件事：
 
 1. **通过 CubeCL 层分配 GPU buffer**（阶段 2）
 2. **在 Fusion 流中登记一个 `NoOp`**——表示"这个 tensor 的数据已经在 GPU 上了，不需要额外计算"
@@ -346,23 +340,12 @@ Fusion 层拿到 buffer handle 后，通过 `client.register_tensor_handle(handl
 
 ## 对比：有无 Fusion 的区别
 
-把 `Backend` 换为裸 `CubeBackend<WgpuRuntime>`（去掉 `Fusion<...>` 包装）：
+内部后端类型从 `Fusion<CubeBackend<WgpuRuntime>>` 换为裸 `CubeBackend<WgpuRuntime>`（去掉 `Fusion<...>` 包装）的效果：
 
-```rust
-// 有 Fusion：
-type Backend = Fusion<CubeBackend<WgpuRuntime>>;
-let y = tensor_1.clone() * 2.0 + 1.0;  // ← 入队三条 OperationIr：Clone, ScalarMul, ScalarAdd
-let z = y.tanh();                       // ← 入队 Tanh
-println!("{}", z);                       // ← drain → 融合为 1 个 kernel → 执行
+- **有 Fusion**：`tensor_1.clone() * 2.0 + 1.0` 入队三条 `OperationIr`（Clone, ScalarMul, ScalarAdd）；`.tanh()` 入队第四条。`println!` 时 drain → 四合一 `elemwise_fuse` kernel → **一次 GPU launch**
+- **无 Fusion**：每条语句立即触发 GPU 操作，分别产生至少 4 次 kernel launch
 
-// 无 Fusion：
-type Backend = CubeBackend<WgpuRuntime>;
-let y = tensor_1.clone() * 2.0 + 1.0;  // ← 每条语句触发 GPU 操作（至少 3 次 kernel launch）
-let z = y.tanh();                       // ← 再 1 次 kernel launch
-println!("{}", z);                       // ← 读回结果
-```
-
-有 Fusion 时，四个逻辑操作（Clone、ScalarMul、ScalarAdd、Tanh）被融合到**一个** `elemwise_fuse` kernel 中，只需一次 GPU launch。无 Fusion 时，每个操作至少一次 launch。
+（在 `src/burn-test/` 中，`Device::wgpu(...)` 默认包含 Fusion。要对比，可将 burn feature 中的 `fusion` 关闭，或在概念上把 Fusion 层替换为直通后端。）
 
 ---
 
@@ -390,7 +373,7 @@ println!("{}", z);                       // ← 读回结果
 
 ## 作业
 
-1. 把主示例中的 `Backend` 改为 `CubeBackend<WgpuRuntime>`（去掉 `Fusion<...>`），用 `RUST_LOG=cubecl_wgpu::runtime=trace` 跑一次，对比有 Fusion 和无 Fusion 时日志中 buffer 分配和 kernel launch 的次数差异。
+1. 在 `src/burn-test/Cargo.toml` 的 burn features 中去掉 `wgpu` 的 fusion 子功能（或添加 `default-features = false` 后手动列出不含 fusion 的 features），用 `RUST_LOG=cubecl_wgpu::runtime=trace` 跑一次，对比有 Fusion 和无 Fusion 时 kernel launch 的次数差异。
 
 2. 在 `from_data` 之后、`println!` 之前各加一条 `println!("tensor created")` 和 `println!("before drain")`，观察 Fusion 日志出现的时间点——验证操作入队和 drain 的时序。
 

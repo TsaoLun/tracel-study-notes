@@ -16,7 +16,7 @@
 本专题用一个可在 Burn 仓库跑通的融合示例（独立可运行版本见 `src/burn-test/`；机制草稿参考 [nihalpasham 的 Gist](https://gist.github.com/nihalpasham/fc128f074e20d880bfd97198c2ac784b)）：
 
 ```rust
-let tensor_1 = Tensor::<Backend, 2>::from_data(
+let tensor_1 = Tensor::<2>::from_data(
     [[2., 3.], [4., 5.]], &device
 );
 let y = tensor_1.clone() * 2.0 + 1.0;  // ScalarMul + ScalarAdd
@@ -41,7 +41,7 @@ RUST_LOG=burn_fusion=trace,cubecl_wgpu::runtime=trace cargo run --release
 
 | 名字 | 是什么 | 在哪里 |
 |------|--------|--------|
-| **`Wgpu`** | 类型别名：`Fusion<CubeBackend<WgpuRuntime>>` | `burn` 仓库 example 或用户代码 |
+| **`Wgpu`** | 内部类型栈：`Fusion<CubeBackend<WgpuRuntime>>`（用户通过 `Device::wgpu(..)` 获取，默认启用 fusion） | `burn/` · `crates/burn-wgpu/src/lib.rs` |
 | **`GlobalFusionClient`** | Fusion 层的客户端：`DeviceHandle<FusionServer>` + `FusionDevice`，通过 `submit`/`submit_blocking` 与 server 通信 | `burn/` · `crates/burn-fusion/src/client.rs` |
 | **`MultiStream`** | 管理多个操作流：`HashMap<StreamId, Stream>` | `burn/` · `crates/burn-fusion/src/stream/multi.rs` |
 | **`OperationQueue`** | 单流的操作队列：`global`/`relative`/`operations`/`variables` | `burn/` · `crates/burn-fusion/src/stream/queue/base.rs` |
