@@ -1,7 +1,7 @@
 # CubeCL 专题写作计划
 
-> 本专题在 [CubeCL GPU 地图](blog-cubecl-summary.md)（鸟瞰：expand、SSA、autotune、CubeK）之后，按**可跟练、可对照源码**的顺序拆章。  
-> **读计划前**：若你从未跑过 CubeCL，可先读 [summary 读前须知](blog-cubecl-summary.md#读前须知) 或下方「入门引导」，再打开 [第一章](blog-cubecl-1.md)。
+> 本专题在 [CubeCL GPU 地图](summary.md)（概述：expand、SSA、autotune、CubeK）之后，按**可跟练、可对照源码**的顺序拆章。  
+> **读计划前**：若你从未跑过 CubeCL，可先读 [summary 读前须知](summary.md#读前须知) 或下方「入门引导」，再打开 [第一章](1-gelu-launch.md)。
 
 ---
 
@@ -27,16 +27,16 @@
 
 ### 建议阅读顺序
 
-1. 可选：扫一眼 [summary 词汇表 · 核心概念](blog-cubecl-summary.md#核心概念本篇最重要)（5 分钟）。
+1. 可选：扫一眼 [summary 词汇表 · 核心概念](summary.md#核心概念本篇最重要)（5 分钟）。
 2. **第一章**：跟跑 `cargo run --example gelu --features cpu`（无 GPU 也可）。
 3. 并行参考：[cubecl-book · Installation + Simple Reduction](cubecl/cubecl-book/src/getting-started/summary.md)（练手写 reduction，与本专题互补）。
-4. 需要全貌时再读 [blog-cubecl-summary.md](blog-cubecl-summary.md)。
+4. 需要全貌时再读 [summary.md](summary.md)。
 
 ### 三份材料如何分工
 
 | 材料 | 角色 |
 |------|------|
-| [blog-cubecl-summary.md](blog-cubecl-summary.md) | **地图**：文首 [读前须知](blog-cubecl-summary.md#读前须知) + 机制全览 + 文末术语表 |
+| [summary.md](summary.md) | **地图**：文首 [读前须知](summary.md#读前须知) + 机制全览 + 文末术语表 |
 | [cubecl-book](cubecl/cubecl-book/src/SUMMARY.md) | **练手写 kernel**（reduction 渐进教程） |
 | **本专题** | **对照源码走编译器路径**（launch → expand → opt → 后端） |
 
@@ -45,7 +45,7 @@
 ## 定位与读者
 
 **目标读者**：会用 Rust；未必写过 GPU；未必读过 Burn 系列（有则更好）。  
-**不覆盖**：Burn Fusion 调度细节（见 [blog-burn-summary.md](blog-burn-summary.md) 第五节）。
+**不覆盖**：Burn Fusion 调度细节（见 [../burn/summary.md](../burn/summary.md) 第五节）。
 
 ---
 
@@ -55,7 +55,7 @@
 2. **每章一个主示例**，源码路径写全（相对 `cubecl/` 仓库根）。
 3. **正文先可运行、再钉源码**；编译器深度逐章加码。
 4. **章末**：小结 + 作业 + 下章预告。
-5. **完整术语表**仍以 [summary 文末](blog-cubecl-summary.md#词汇说明表) 为准；各章只引入本章最少新词。
+5. **完整术语表**仍以 [summary 文末](summary.md#词汇说明表) 为准；各章只引入本章最少新词。
 
 ---
 
@@ -63,14 +63,14 @@
 
 | 章 | 文件 | 标题 | 读完能做什么 | 核心源码锚点 |
 |:---:|------|------|--------------|--------------|
-| 1 | [blog-cubecl-1.md](blog-cubecl-1.md) | 用 GELU 走通一条 launch | Host launch、`GeluArray::define`、`KernelBuilder.scope` | `examples/gelu/`、`launch.rs`、`kernel.rs`（`define_body`）、`compute/builder.rs` |
-| 2 | [blog-cubecl-2.md](blog-cubecl-2.md) | expand：`+` → `__expand_*_method` → IR | 理解 **NativeExpand 间接层**，而非「表达式直连 Operation」 | `generate/expression.rs`、`generate/kernel.rs` |
-| 3 | blog-cubecl-3.md | trait / impl 与 `#[define]` | `Float` 泛型 kernel、`__expand_{method}`、CubeK 常见签名 | `parse/cube_trait.rs`、`parse/cube_impl.rs`、`generate/cube_trait.rs` |
-| 4 | blog-cubecl-4.md | comptime 与 JIT 缓存键 | `#[comptime]`、`comptime!`、多份 JIT 产物 | `parse/kernel.rs`、`parse/statement.rs`、`generate/kernel.rs`（`KernelId`）；参考 book `core-features/comptime.md` |
-| 5 | blog-cubecl-5.md | 拓扑与四轴 | `ABSOLUTE_POS`、`PLANE_DIM`、launch 与硬件映射 | `frontend/topology.rs`、`cubecl-cpp/.../kernel.rs` |
-| 6 | blog-cubecl-6.md | JIT 管线：Scope → PTX/WGSL | SSA、**post-SSA 定点循环**、后端 | `cubecl-opt/src/lib.rs`（`apply_post_ssa_passes` ~605–615） |
-| 7 | blog-cubecl-7.md | vectorization 与 autotune（两节） | 区分 launch 时 JIT 键 vs 首次执行 benchmark | **§7.1** `gelu` `vector_size`、`core-features/vectorization.md`；**§7.2** `cubecl-runtime/.../tune/`、CubeK `TileKind` |
-| 8 | blog-cubecl-8.md | CubeK 纪律与 Burn 边界 | Blueprint 纪律 + Burn 如何落到 CubeCL | cubek `GUIDE.md`；`burn-cubecl`、`Backend` trait、Fusion 与 JIT 分界 |
+| 1 | [1-gelu-launch.md](1-gelu-launch.md) | 用 GELU 走通一条 launch | Host launch、`GeluArray::define`、`KernelBuilder.scope` | `examples/gelu/`、`launch.rs`、`kernel.rs`（`define_body`）、`compute/builder.rs` |
+| 2 | [2-expand.md](2-expand.md) | expand：`+` → `__expand_*_method` → IR | 理解 **NativeExpand 间接层**，而非「表达式直连 Operation」 | `generate/expression.rs`、`generate/kernel.rs` |
+| 3 | 3-trait-impl.md | trait / impl 与 `#[define]` | `Float` 泛型 kernel、`__expand_{method}`、CubeK 常见签名 | `parse/cube_trait.rs`、`parse/cube_impl.rs`、`generate/cube_trait.rs` |
+| 4 | 4-comptime.md | comptime 与 JIT 缓存键 | `#[comptime]`、`comptime!`、多份 JIT 产物 | `parse/kernel.rs`、`parse/statement.rs`、`generate/kernel.rs`（`KernelId`）；参考 book `core-features/comptime.md` |
+| 5 | 5-topology.md | 拓扑与四轴 | `ABSOLUTE_POS`、`PLANE_DIM`、launch 与硬件映射 | `frontend/topology.rs`、`cubecl-cpp/.../kernel.rs` |
+| 6 | 6-jit-pipeline.md | JIT 管线：Scope → PTX/WGSL | SSA、**post-SSA 定点循环**、后端 | `cubecl-opt/src/lib.rs`（`apply_post_ssa_passes` ~605–615） |
+| 7 | 7-vectorization-autotune.md | vectorization 与 autotune（两节） | 区分 launch 时 JIT 键 vs 首次执行 benchmark | **§7.1** `gelu` `vector_size`、`core-features/vectorization.md`；**§7.2** `cubecl-runtime/.../tune/`、CubeK `TileKind` |
+| 8 | 8-cubek-burn.md | CubeK 纪律与 Burn 边界 | Blueprint 纪律 + Burn 如何落到 CubeCL | cubek `GUIDE.md`；`burn-cubecl`、`Backend` trait、Fusion 与 JIT 分界 |
 
 > **相对原 7 章计划的变化**：新增 **第 3 章 trait/impl**（评估指出缺口）；原第 6 章拆为 **两节** 仍在一篇内；原第 7 章扩 checklist 并改为第 8 章。
 
@@ -80,7 +80,7 @@
 
 ### 第一章（已写，需与源码对齐）
 
-- [x] 章首说明 GELU / `gelu_array` / 示例路径（见 [blog-cubecl-1.md](blog-cubecl-1.md)）
+- [x] 章首说明 GELU / `gelu_array` / 示例路径（见 [1-gelu-launch.md](1-gelu-launch.md)）
 - [x] 分别用 `cargo run --example gelu --features cpu|cuda|wgpu` 跑通（**三次编译**，非一次跑三后端）
 - [x] `ABSOLUTE_POS` + `vector_size` / `CubeDim` 算术（`CubeDim::new_1d(1)` 当 len=4、vector_size=4）
 - [x] `mod gelu_array` 含 **`GeluArray` + `CubeKernel::define`**
@@ -135,7 +135,7 @@
 
 - kernel explosion 算术（3×3×3 × TileKind）
 - Burn 调用链：`Backend` → `burn-cubecl` → `ComputeClient` → CubeK kernel launch
-- **Fusion 调度 vs CubeCL JIT** 边界（引用 [blog-burn-summary.md](blog-burn-summary.md) 第五节）
+- **Fusion 调度 vs CubeCL JIT** 边界（引用 [../burn/summary.md](../burn/summary.md) 第五节）
 - 何时直接用 CubeCL vs 用 Burn + CubeK
 
 ---
@@ -165,9 +165,9 @@
 
 | 状态 | 文档 |
 |------|------|
-| ✅ 已更新 | `blog-cubecl-plan.md`（本文件）、`blog-cubecl-1.md`（修订）、`blog-cubecl-2.md` |
-| 📋 待写 | `blog-cubecl-3.md` … `blog-cubecl-8.md` |
-| 📎 地图 | `blog-cubecl-summary.md` |
+| ✅ 已更新 | `index.md`（本文件）、`1-gelu-launch.md`（修订）、`2-expand.md` |
+| 📋 待写 | `3-trait-impl.md` … `8-cubek-burn.md` |
+| 📎 地图 | `summary.md` |
 
 ---
 
@@ -175,10 +175,10 @@
 
 | 篇 | 文档 | 状态 |
 |:---:|------|------|
-| 地图 | [blog-cubecl-summary.md](blog-cubecl-summary.md) | 已发布 |
+| 地图 | [summary.md](summary.md) | 已发布 |
 | 计划 | **本文** | 已更新 |
-| 专题 1 | [blog-cubecl-1.md](blog-cubecl-1.md) | 已修订 |
-| 专题 2 | [blog-cubecl-2.md](blog-cubecl-2.md) | 已发布 |
-| 专题 3–8 | `blog-cubecl-3.md` … | 待写 |
+| 专题 1 | [1-gelu-launch.md](1-gelu-launch.md) | 已修订 |
+| 专题 2 | [2-expand.md](2-expand.md) | 已发布 |
+| 专题 3–8 | `3-trait-impl.md` … | 待写 |
 
-*Burn 底层机制 · CubeCL 专题 · [系列索引](README.md)*
+*Burn 底层机制 · CubeCL 专题 · [系列索引](../../README.md)*

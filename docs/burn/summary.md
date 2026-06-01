@@ -3,10 +3,10 @@
 ## 读前须知
 
 - **Burn 是什么**：Tracel 的 Rust 深度学习框架——用编译期单态化把正交能力（Autodiff / Fusion / 后端 / 路由）的自由组合压进类型系统。`Autodiff<Fusion<CubeBackend<CudaRuntime>>>` 是编译期展开的具体类型，与 `device = "cuda:0"` 式的运行时字符串选择是不同路径。
-- **本文覆盖**：编译期类型栈（Autodiff 只包浮点、Fusion 全包）、运行时融合流（v0.21.0 channel 重构）、框架开销——作为 Burn 底层机制系列的综合地图。ONNX AOT 见 [专文](blog-burn-onnx-summary.md)，GPU JIT 见 [CubeCL 篇](blog-cubecl-summary.md)。
+- **本文覆盖**：编译期类型栈（Autodiff 只包浮点、Fusion 全包）、运行时融合流（v0.21.0 channel 重构）、框架开销——作为 Burn 底层机制系列的综合地图。ONNX AOT 见 [专文](onnx-summary.md)，GPU JIT 见 [CubeCL 篇](../cubecl/summary.md)。
 - **机制基准**：融合 channel 重构以 burn v0.21.0 为叙述锚点；源码行号为近似值，以路径 + 符号名为准。
 
-系列分工与导航见 [README](README.md)。
+系列分工与导航见 [README](../../README.md)。
 
 ---
 
@@ -126,17 +126,19 @@ impl<B: FusionBackend> BackendTypes for Fusion<B> {
 
 ## 五、运行时：融合流与 channel 重构（v0.21.0）
 
+> **逐机制跟练**：本节是融合运行时的宏观概述。若要照源码逐行追踪——从 `OperationQueue` 入队到 `elemwise_fuse` kernel 执行，见 [Burn Fusion 专题写作计划](fusion/index.md)（8 章，待写）。
+
 ### 问题：递归锁成瓶颈
 
 0.20.1 的 `DeviceHandle` 内是递归互斥锁——`FusionServer` 与 CubeCL 运行时在同一把锁里串行。16 线程高负载下，`Fusion<CubeBackend>` 比裸 `CubeBackend` 慢（融合排队 + JIT 编译执行互相阻塞）。0.21.0 改为 worker 线程池上的 fire-and-forget channel——融合与执行可流水线并行。
 
-> 具体性能数字来自 Burn 团队内部 benchmark，未收录公开 CI。机制变化（递归锁 → worker channel）见 `burn-fusion/src/client.rs` 的 `submit()`/`submit_blocking()` 与 `DeviceServiceStage::Upstream`。
+> 具体性能数字来自 Burn 团队内部 benchmark，未收录公开 CI。机制变化（递归锁 → worker channel）见 `burn/` · `crates/burn-fusion/src/client.rs` 的 `submit()`/`submit_blocking()` 与 `DeviceServiceStage::Upstream`。
 
 ### 融合流：推迟的是"算子怎么合并"
 
 在 `Fusion<B>` 下，`tensor.matmul(&other)` 生成 `OperationIr::Matmul`，进入当前流的队列——不立刻触发 GPU matmul。只有读张量（`.to_data()`）才 `drain_stream`，排空队列并提交执行。
 
-`MultiStream`（`burn-fusion/src/stream/multi.rs`）管理多流：每个 `StreamId` 有独立 `OperationQueue` + `Processor`。Processor 做**增量融合**——把 op 喂给 fuser，fuser 返回 Open 或 Closed；关闭后写入 `ExecutionPlanStore`，新 fuser 继续吃下一段。同一流上，前几段可能已执行，后几段仍在积累。
+`MultiStream`（`burn/` · `crates/burn-fusion/src/stream/multi.rs`）管理多流：每个 `StreamId` 有独立 `OperationQueue` + `Processor`。Processor 做**增量融合**——把 op 喂给 fuser，fuser 返回 Open 或 Closed；关闭后写入 `ExecutionPlanStore`，新 fuser 继续吃下一段。同一流上，前几段可能已执行，后几段仍在积累。
 
 `submit()` 不阻塞——任务进 server 的 worker 队列，客户端继续入队。只有 `read_float()` 走 `submit_blocking()`，排空流并取回结果。
 
@@ -148,7 +150,7 @@ impl<B: FusionBackend> BackendTypes for Fusion<B> {
 
 ### 与 CubeCL JIT 的边界
 
-| 维度 | Fusion 流 | JIT + autotune（[CubeCL 篇](blog-cubecl-summary.md)） |
+| 维度 | Fusion 流 | JIT + autotune（[CubeCL 篇](../cubecl/summary.md)） |
 |------|-----------|------------------------------------------------------|
 | 推迟什么 | 连续 op 如何合并、何时 drain | 某次 launch 用哪份 GPU 代码、哪种 tile |
 | 决策粒度 | 操作序列 | 单次 kernel 的实现 |
@@ -178,7 +180,7 @@ pub enum DispatchDevice {
 
 Burn 的 ONNX 支持是在 `build.rs` 里运行的 AOT 编译器——把 ONNX 翻译为可调试的 Rust 源码与 `model.bpk` 权重，运行时二进制不依赖 ONNX Runtime。生成的 `model.rs` 是普通 Burn 代码，穿过本文的类型栈和融合流，首次遇具体形状时触发 CubeCL JIT。
 
-完整 IR 流水线、注意力融合、分区编译、测试体系——见 [Burn-ONNX 专文](blog-burn-onnx-summary.md)。
+完整 IR 流水线、注意力融合、分区编译、测试体系——见 [Burn-ONNX 专文](onnx-summary.md)。
 
 ---
 
@@ -225,6 +227,9 @@ GPU 执行
 | **增量融合** | Processor 喂 op 给 fuser，Open/Closed 状态机，融合决策与执行可流水线重叠 |
 | **DeviceHandle / submit()** | 0.21.0 channel 架构：fire-and-forget 入队，worker 池并行 |
 | **Drain** | `read_float` 等操作触发，排空流中所有 op，融合并提交执行 |
+| **Block** | `StreamOptimizer` 中一组可融合操作的抽象：包含 op 序列、`OptimizationBuilder` 列表、ordering；通过 tensor ID 交集决定 accept/reject |
+| **FuseBlockBuilder** | 构建融合块的 builder：跟踪 `ops`/`reads`/`writes`/`tensor_writes`，`tensor_writes()` 做数据流分析决定哪些中间结果不需写全局内存 |
+| **FuseTrace** | 融合的最终产物：`Vec<FuseBlock>` + `FuseResources`（inputs/outputs/scalars），交给 `LaunchPlanExecutor` 执行 |
 
 ### 缩写
 
@@ -236,4 +241,4 @@ GPU 执行
 | PTX | Parallel Thread Execution（NVIDIA） |
 | NVRTC | NVIDIA Runtime Compiler |
 
-*Burn 底层机制系列 · 综合地图 · 导航见 [README](README.md)*
+*Burn 底层机制系列 · 综合地图 · 导航见 [README](../../README.md)*

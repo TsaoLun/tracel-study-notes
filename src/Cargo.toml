@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = [
+    "ch1-gelu-variants",
+    "ch2-expand-study",
+    "burn-test",
+]

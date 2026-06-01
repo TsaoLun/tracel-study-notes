@@ -3,10 +3,10 @@
 ## 读前须知
 
 - **CubeCL 是什么**：Tracel 的 Rust GPU 计算库 + 编译器框架——`#[cube]` proc-macro 描述 kernel，首次 launch 时 JIT 到 CUDA/HIP/WGPU/CPU，不为每个平台手写 `.cu`/`.wgsl`/`.metal`。
-- **本文覆盖**：`#[cube]` 宏展开、comptime/autotune 双机制、JIT 管线、CubeK 纪律——作为 Burn 底层机制系列的 GPU 篇。跟练走 [CubeCL 专题](blog-cubecl-plan.md)。
+- **本文覆盖**：`#[cube]` 宏展开、comptime/autotune 双机制、JIT 管线、CubeK 纪律——作为 Burn 底层机制系列的 GPU 篇。跟练走 [CubeCL 专题](index.md)。
 - **机制基准**：cubecl 仓库 `cubecl-opt/src/lib.rs`（JIT pass）、cubek 仓库 `crates/cubek-std/src/tile/base.rs`（TileKind）。术语首次出现括号简注，完整释义见文末词汇表。
 
-系列分工与导航见 [README](README.md)。
+系列分工与导航见 [README](../../README.md)。
 
 ---
 
@@ -237,7 +237,7 @@ CppCompiler<CudaDialect> → CUDA C++ → NVRTC → PTX → CompilationCache 写
 cudarc launch；ABSOLUTE_POS 写 output
 ```
 
-换 `--features wgpu`，中间换成 WgslCompiler，无 NVRTC。`#[cube]` 函数体不变。跟练走 [CubeCL 专题 · 第一章](blog-cubecl-1.md)。
+换 `--features wgpu`，中间换成 WgslCompiler，无 NVRTC。`#[cube]` 函数体不变。跟练走 [CubeCL 专题 · 第一章](1-gelu-launch.md)。
 
 ---
 
@@ -287,4 +287,4 @@ cudarc launch；ABSOLUTE_POS 写 output
 | WMMA | Warp Matrix Multiply Accumulate |
 | AOT | Ahead-of-Time（对比 JIT，见 ONNX 篇） |
 
-*Burn 底层机制系列 · GPU 地图 · 导航见 [README](README.md)*
+*Burn 底层机制系列 · GPU 地图 · 导航见 [README](../../README.md)*

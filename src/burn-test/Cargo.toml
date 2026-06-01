@@ -1,0 +1,10 @@
+[package]
+name = "burn-test"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+burn = { path = "../../burn/crates/burn", features = ["wgpu", "autodiff"] }
+log = "0.4"
+env_logger = "0.11"

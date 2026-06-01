@@ -3,7 +3,7 @@
 > **本章锚点**：GELU 示例中 `x / Vector::new(sqrt2)` 这行代码，从 Rust 语法树到 IR 里的 `Operation::Arithmetic(Div, …)`，中间经过两层转换。  
 > **读完能干什么**：能读 `cubecl-macros/src/generate/expression.rs` 中的 `Expression::to_tokens` 匹配臂，解释为什么表达式不是「AST 直连 Operation」；能用 `ArithKernel::define()` 打印 expand 生成的 Scope。
 
-> **前置**：[第一章](blog-cubecl-1.md)（launch 调用链、`expand` 何时被调用）。术语见 [summary 词汇表](blog-cubecl-summary.md#词汇说明表)。
+> **前置**：[第一章](1-gelu-launch.md)（launch 调用链、`expand` 何时被调用）。术语见 [summary 词汇表](summary.md#词汇说明表)。
 
 ---
 
@@ -11,9 +11,9 @@
 
 | 文档 | 你得到什么 |
 |------|------------|
-| [专题一](blog-cubecl-1.md) | launch 调用链：`launch_unchecked` → `define()` → `expand` 在哪被调用 |
+| [专题一](1-gelu-launch.md) | launch 调用链：`launch_unchecked` → `define()` → `expand` 在哪被调用 |
 | **本章** | expand 内部：表达式如何经两层方法调用最终向 `Scope` 注册 `Operation` |
-| [专题三](blog-cubecl-plan.md#第三章待写新增) | trait/impl 与 `#[define]`——泛型 kernel 如何注册 |
+| [专题三](index.md#第三章待写新增) | trait/impl 与 `#[define]`——泛型 kernel 如何注册 |
 
 ---
 
@@ -304,7 +304,7 @@ Expression::Binary {
 
 跟练时不必走完整 launch 管线。宏为每个 `#[cube(launch)]` kernel 生成 **`{Name}Kernel` 结构体** 与 **`CubeKernel::define()`**——在 Host CPU 上运行 `expand`，把指令填入 `Scope`，**不提交后端编译**。
 
-跟练骨架（`homework/ch2-expand-study/`）用法：
+跟练骨架（`src/ch2-expand-study/`）用法：
 
 ```rust
 use cubecl::prelude::*;
@@ -341,7 +341,7 @@ Expression::FunctionCall { func, args, associated_type: None, .. } => {
 }
 ```
 
-例如 `plane_sum(input)` 被翻译为 `plane_sum::expand(scope, input.into())`。不是方法调用，而是模块级 `expand` 函数——因为 `plane_sum` 是 CubeCL 前端函数，不是类型上的方法。
+例如 `plane_sum(input)` 被翻译为 `plane_sum::expand(scope, input.into())`——调用模块级 `expand` 函数而非类型方法，因为 `plane_sum` 是 CubeCL 前端函数。
 
 ---
 
@@ -357,7 +357,7 @@ Expression::FunctionCall { func, args, associated_type: None, .. } => {
 
 ## 作业
 
-> 可运行骨架：[homework/ch2-expand-study/](homework/ch2-expand-study/)（`cd homework/ch2-expand-study && cargo test -- --nocapture`）。
+> 可运行骨架：[src/ch2-expand-study/](src/ch2-expand-study/)（`cd src/ch2-expand-study && cargo test -- --nocapture`）。
 
 1. 在 `cubecl-macros/src/generate/expression.rs` 中找到 `Expression::FunctionCall`（两个匹配臂）和 `Expression::MethodCall` 的处理分支，写一段注释说明两者展开方式的差异。（提示：自由函数用 `{path}::expand` 或 `__expand_{name}`；方法调用用 `receiver.__expand_{method}_method`。）
 
@@ -372,8 +372,8 @@ Expression::FunctionCall { func, args, associated_type: None, .. } => {
 
 ## 下章预告
 
-**[第三章 · trait/impl 与 `#[define]`](blog-cubecl-plan.md#章节目录)**（待写）：`Float` 泛型 kernel 的 expand 如何生成；`__expand_{method}` 命名规则在 trait 方法上的变化；CubeK 常见 `#[define(Lhs, Rhs)]` 签名。
+**[第三章 · trait/impl 与 `#[define]`](index.md#章节目录)**（待写）：`Float` 泛型 kernel 的 expand 如何生成；`__expand_{method}` 命名规则在 trait 方法上的变化；CubeK 常见 `#[define(Lhs, Rhs)]` 签名。
 
 ---
 
-*Burn 底层机制 · CubeCL 专题 · 第二章 · [系列索引](README.md)*
+*Burn 底层机制 · CubeCL 专题 · 第二章 · [系列索引](../../README.md)*

@@ -3,10 +3,10 @@
 ## 读前须知
 
 - **Burn ONNX 是什么**：在 `build.rs` 里运行的 AOT 编译器——把 ONNX 图翻译为可调试的 Rust 源码（`model.rs`）与权重（`model.bpk`），运行时二进制不依赖 ONNX Runtime。
-- **本文覆盖**：IR 流水线（6 阶段）、注意力融合（hero pass）、分区编译、三层测试体系。Burn 类型栈与融合流见 [综合地图](blog-burn-summary.md)，GPU JIT 见 [CubeCL 篇](blog-cubecl-summary.md)。
+- **本文覆盖**：IR 流水线（6 阶段）、注意力融合（hero pass）、分区编译、三层测试体系。Burn 类型栈与融合流见 [综合地图](summary.md)，GPU JIT 见 [CubeCL 篇](../cubecl/summary.md)。
 - **统计基准**：测试数字来自 `burn-onnx` 仓库 `crates/onnx-official-tests/expectations.toml`（ONNX v1.19.0，1615 条），复验命令见 [README](README.md#源码版本与数字校验)。
 
-系列分工与导航见 [README](README.md)。
+系列分工与导航见 [README](../../README.md)。
 
 ---
 
@@ -155,4 +155,4 @@ SDXL 的 UNet 有上万个节点，全部塞进一个 `forward()` 会导致 Rust
 | **分区编译** | 大图切为 64–256 节点子模块（`partition.rs`） |
 | **IR 流水线** | Protobuf → 类型推断 → 8 个 simplify pass 定点迭代 → finalization → codegen |
 
-*Burn 底层机制系列 · ONNX AOT 编译 · 导航见 [README](README.md)*
+*Burn 底层机制系列 · ONNX AOT 编译 · 导航见 [README](../../README.md)*

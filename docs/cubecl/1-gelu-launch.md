@@ -3,7 +3,7 @@
 > **本章锚点**：CubeCL 仓库里的官方示例 `cubecl/examples/gelu/`。  
 > **GELU** 是逐元素的激活函数；**`gelu_array`** 是示例里 kernel 的函数名（不是 Burn 里的模块名）。你写的 `gelu_array` 看起来像普通 Rust，但它使用 CubeCL 前端类型（`Vector`、`ABSOLUTE_POS`），**不能**在 `main` 里直接调用。Host 侧应调用宏生成的 **`gelu_array::launch_unchecked`**；设备代码在**首次 launch** 时才 JIT 编译。
 
-> **读者提示**：*kernel* / *JIT* 等见 [summary 读前须知](blog-cubecl-summary.md#读前须知) 与 [词汇表](blog-cubecl-summary.md#词汇说明表)。专题目录见 [blog-cubecl-plan.md](blog-cubecl-plan.md#入门引导gpu--cubecl-新人必读)。
+> **读者提示**：*kernel* / *JIT* 等见 [summary 读前须知](summary.md#读前须知) 与 [词汇表](summary.md#词汇说明表)。专题目录见 [index.md](index.md#入门引导gpu--cubecl-新人必读)。
 
 ---
 
@@ -11,8 +11,8 @@
 
 | 文档 | 你得到什么 |
 |------|------------|
-| [blog-cubecl-plan.md · 入门引导](blog-cubecl-plan.md#入门引导gpu--cubecl-新人必读) | GELU 示例是什么、建议阅读顺序 |
-| [blog-cubecl-summary.md](blog-cubecl-summary.md) | 编译器全景（可先略读，遇词再查表） |
+| [index.md · 入门引导](index.md#入门引导gpu--cubecl-新人必读) | GELU 示例是什么、建议阅读顺序 |
+| [summary.md](summary.md) | 编译器全景（可先略读，遇词再查表） |
 | **本章** | 跟跑 gelu 示例，看清 launch → `define()` → `expand` |
 | [cubecl-book · Getting Started](cubecl/cubecl-book/src/getting-started/summary.md) | 并行练习 reduction（教写 kernel，不教宏展开） |
 
@@ -111,7 +111,7 @@ fn gelu_scalar<F: Float, N: Size>(x: Vector<F, N>) -> Vector<F, N> {
 ```
 
 - **`gelu_array`**：每个并行 **unit** 根据全局下标 `ABSOLUTE_POS` 读写一个 `Vector` 槽位（elementwise）。
-- **`gelu_scalar`**：真正的 GELU 公式；被上层 kernel 调用，自身不带 `launch`。
+- **`gelu_scalar`**：GELU 公式的具体计算；被上层 kernel 调用，自身不带 `launch`。
 
 ### `ABSOLUTE_POS`
 
@@ -119,7 +119,7 @@ fn gelu_scalar<F: Float, N: Size>(x: Vector<F, N>) -> Vector<F, N> {
 
 ### `Vector<F, N>` 与 `vector_size`
 
-`Vector` 表示一个 unit 上一次处理 **N** 个标量。Host 在 launch 时传入 `vector_size`（本例为 4），参与 JIT 特化（详见 [专题第七章 §7.1](blog-cubecl-plan.md#第七章待写一章两节)）。
+`Vector` 表示一个 unit 上一次处理 **N** 个标量。Host 在 launch 时传入 `vector_size`（本例为 4），参与 JIT 特化（详见 [专题第七章 §7.1](index.md#第七章待写一章两节)）。
 
 ### `comptime!`
 
@@ -260,7 +260,7 @@ builder.build(self.settings.clone())  // → KernelDefinition（仍是 IR 级描
 | `cargo build` 生成 GPU 代码 | GPU 代码在 **首次 launch miss** 时生成 |
 | 一次命令跑齐 cpu+cuda+wgpu | 需 **分别** `cargo run --features …` |
 
-**预告**：CubeK 等复杂 kernel 常用 **`#[define(Lhs, Rhs, …)]`** 把 launch 泛型与类型映射注册进宏；gelu 未使用。见 [专题第三章](blog-cubecl-plan.md#第三章待写新增) 与 [第二章](blog-cubecl-plan.md#第二章待写)。
+**预告**：CubeK 等复杂 kernel 常用 **`#[define(Lhs, Rhs, …)]`** 把 launch 泛型与类型映射注册进宏；gelu 未使用。见 [专题第三章](index.md#第三章待写新增) 与 [第二章](index.md#第二章待写)。
 
 ---
 
@@ -274,7 +274,7 @@ builder.build(self.settings.clone())  // → KernelDefinition（仍是 IR 级描
 
 ## 作业
 
-> 可运行骨架见 [homework/ch1-gelu-variants/src/lib.rs](homework/ch1-gelu-variants/src/lib.rs)。`cd homework/ch1-gelu-variants && cargo test -- --nocapture` 即可运行。
+> 可运行骨架见 [src/ch1-gelu-variants/src/lib.rs](src/ch1-gelu-variants/src/lib.rs)。`cd src/ch1-gelu-variants && cargo test -- --nocapture` 即可运行。
 
 1. `input` 改为 8 个元素，分别设 `vector_size = 1` 与 `4`，推导 `CubeDim::new_1d(...)`，用 `--features cpu` 验证。
 2. 在 `gelu_scalar` 里加 `comptime!` 常量，观察无需改 launch 签名即可重跑；对比「增加 `#[comptime] bool` launch 参数」对缓存键的影响（预告第四章）。
@@ -283,7 +283,7 @@ builder.build(self.settings.clone())  // → KernelDefinition（仍是 IR 级描
 
 ## 下章预告
 
-**[第二章 · expand：`+` 如何变成 `__expand_add_method`](blog-cubecl-2.md)**：表达式经 **`IntoExpand` / `NativeExpand` 两层方法** 再写入 `Scope`——parse 层（Rust AST → `Expression` 枚举）→ generate 层（`Expression` → `__expand_*_method`）。跟读 `cubecl-macros/src/generate/expression.rs`。
+**[第二章 · expand：`+` 如何变成 `__expand_add_method`](2-expand.md)**：表达式经 **`IntoExpand` / `NativeExpand` 两层方法** 再写入 `Scope`——parse 层（Rust AST → `Expression` 枚举）→ generate 层（`Expression` → `__expand_*_method`）。跟读 `cubecl-macros/src/generate/expression.rs`。
 
 ---
 
@@ -291,9 +291,9 @@ builder.build(self.settings.clone())  // → KernelDefinition（仍是 IR 级描
 
 | 篇 | 文档 |
 |:---:|------|
-| 地图 | [blog-cubecl-summary.md](blog-cubecl-summary.md) |
-| 计划 | [blog-cubecl-plan.md](blog-cubecl-plan.md) |
+| 地图 | [summary.md](summary.md) |
+| 计划 | [index.md](index.md) |
 | **专题 1** | **本文** |
 | 专题 2–8 | 见计划表 |
 
-*Burn 底层机制 · CubeCL 专题 · 第一章 · [系列索引](README.md)*
+*Burn 底层机制 · CubeCL 专题 · 第一章 · [系列索引](../../README.md)*

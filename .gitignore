@@ -1,10 +1,14 @@
 # Reference source repositories (cloned for code study, not part of this project)
 .claude/
-burn/
-burn-onnx/
-cubecl/
-cubek/
+/burn/
+/burn-onnx/
+/cubecl/
+/cubek/
 
 # Homework crate build artifacts
-homework/*/target/
-homework/*/Cargo.lock
+src/target/
+src/Cargo.lock
+src/*/target/
+src/*/Cargo.lock
+.DS_Store
+How does automatic kernel fusion work in burn_.mhtml
