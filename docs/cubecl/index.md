@@ -45,7 +45,7 @@
 ## 定位与读者
 
 **目标读者**：会用 Rust；未必写过 GPU；未必读过 Burn 系列（有则更好）。  
-**不覆盖**：Burn Fusion 调度细节（见 [../burn/summary.md](../burn/summary.md) 第五节）。
+**不覆盖**：Burn Fusion 调度细节（见 [../burn/summary.md](../burn/summary.md) 第四节）。
 
 ---
 
@@ -135,7 +135,7 @@
 
 - kernel explosion 算术（3×3×3 × TileKind）
 - Burn 调用链：`Backend` → `burn-cubecl` → `ComputeClient` → CubeK kernel launch
-- **Fusion 调度 vs CubeCL JIT** 边界（引用 [../burn/summary.md](../burn/summary.md) 第五节）
+- **Fusion 调度 vs CubeCL JIT** 边界（引用 [../burn/summary.md](../burn/summary.md) 第四节）
 - 何时直接用 CubeCL vs 用 Burn + CubeK
 
 ---

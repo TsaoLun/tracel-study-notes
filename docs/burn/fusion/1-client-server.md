@@ -12,7 +12,7 @@
 | 文档 | 你得到什么 |
 |------|------------|
 | [index.md · 入门引导](index.md#入门引导burn-fusion-机制新人必读) | 主示例是什么、建议阅读顺序、跟跑方式 |
-| [../summary.md §五](../summary.md#五运行时融合流与-channel-重构v0210) | 融合流宏观全貌（10 分钟） |
+| [../summary.md §四](../summary.md#四运行时融合流与-channel-重构v0210) | 融合流宏观全貌（10 分钟） |
 | **本章** | 看清两条 client-server 链路的结构、一次 tensor 分配穿过它们 |
 | [第二章](index.md#章节目录)（待写） | OperationQueue：操作入队但不执行的语义 |
 
