@@ -1,0 +1,83 @@
+# CubeCL IR Scope Dump — `arith_kernel` (a + b * c)
+
+生成日期: 2026-06-05
+源码: src/ch2-expand-study/src/lib.rs — `#[cube(launch)] fn arith_kernel`
+生成命令: `cd src/ch2-expand-study && cargo test homework_2_ir_dump -- --nocapture`
+说明: 这是 `ArithKernel::define()` 返回的 `KernelDefinition.body` 的 debug 打印。
+      格式为 CubeCL IR 的文本表示。每个 `binding(N)` 是一个 SSA 变量。
+
+---
+
+## 完整 IR
+
+```
+{
+    binding(0) = buffer_len(global(0)) : (array<f32, global<0>>) -> (u32)
+    ptr<slice>(1) = aggregate(global(0), u32(0), binding(0)) : () -> (array<f32, global<0>>)
+    binding(2) = buffer_len(global(1)) : (array<f32, global<1>>) -> (u32)
+    ptr<slice>(3) = aggregate(global(1), u32(0), binding(2)) : () -> (array<f32, global<1>>)
+    binding(4) = buffer_len(global(2)) : (array<f32, global<2>>) -> (u32)
+    ptr<slice>(5) = aggregate(global(2), u32(0), binding(4)) : () -> (array<f32, global<2>>)
+    binding(6) = buffer_len(global(3)) : (array<f32, global<3>>) -> (u32)
+    ptr<slice>(7) = aggregate(global(3), u32(0), binding(6)) : () -> (array<f32, global<3>>)
+    binding(8) = extract(ptr<slice>(1), 2) : (array<f32, global<0>>, u32) -> (u32)
+    binding(9) = AbsolutePos < binding(8) : (u32, u32) -> (bool)
+    if(binding(9)) {
+        binding(10) = extract(ptr<slice>(1), 0) : (array<f32, global<0>>, u32) -> (array<f32, global<0>>)
+        binding(11) = extract(ptr<slice>(1), 1) : (array<f32, global<0>>, u32) -> (u32)
+        binding(12) = binding(11) + AbsolutePos : (u32, u32) -> (u32)
+        binding(13) = &binding(10)[binding(12)] : (array<f32, global<0>>, u32, u32, u32, bool) -> (ptr<f32, global<0>>)
+        binding(14) = load(binding(13)) : (ptr<f32, global<0>>) -> (f32)
+        binding(15) = extract(ptr<slice>(3), 0) : (array<f32, global<1>>, u32) -> (array<f32, global<1>>)
+        binding(16) = extract(ptr<slice>(3), 1) : (array<f32, global<1>>, u32) -> (u32)
+        binding(17) = binding(16) + AbsolutePos : (u32, u32) -> (u32)
+        binding(18) = &binding(15)[binding(17)] : (array<f32, global<1>>, u32, u32, u32, bool) -> (ptr<f32, global<1>>)
+        binding(19) = load(binding(18)) : (ptr<f32, global<1>>) -> (f32)
+        binding(20) = extract(ptr<slice>(5), 0) : (array<f32, global<2>>, u32) -> (array<f32, global<2>>)
+        binding(21) = extract(ptr<slice>(5), 1) : (array<f32, global<2>>, u32) -> (u32)
+        binding(22) = binding(21) + AbsolutePos : (u32, u32) -> (u32)
+        binding(23) = &binding(20)[binding(22)] : (array<f32, global<2>>, u32, u32, u32, bool) -> (ptr<f32, global<2>>)
+        binding(24) = load(binding(23)) : (ptr<f32, global<2>>) -> (f32)
+        binding(25) = binding(19) * binding(24) : (f32, f32) -> (f32)
+        binding(26) = binding(14) + binding(25) : (f32, f32) -> (f32)
+        binding(27) = extract(ptr<slice>(7), 0) : (array<f32, global<3>>, u32) -> (array<f32, global<3>>)
+        binding(28) = extract(ptr<slice>(7), 1) : (array<f32, global<3>>, u32) -> (u32)
+        binding(29) = binding(28) + AbsolutePos : (u32, u32) -> (u32)
+        binding(30) = &binding(27)[binding(29)] : (array<f32, global<3>>, u32, u32, u32, bool) -> (ptr<f32, global<3>>)
+        store(binding(30), binding(26))
+    }
+}
+```
+
+## 关键行注解
+
+| 行号 | IR | 对应 Rust 源码 |
+|------|-----|----------------|
+| 1-7 | `buffer_len` + `aggregate` 四组 | 四个参数 `a`, `b`, `c`, `output` 的 buffer 元信息生成 |
+| 8 | `AbsolutePos < binding(8)` | `ABSOLUTE_POS < a.len()` 边界检查 |
+| 9 | `if(binding(9))` | Rust `if` 翻译为 IR 控制流 |
+| 10-11 | `extract(ptr<slice>(Q), 0/1)` | 每个 buffer 拆为 data pointer + offset |
+| 12 | `+ AbsolutePos` | 元素偏移：`base + ABSOLUTE_POS` |
+| 14 | `load` → `binding(14)` | 加载 `a[ABSOLUTE_POS]` |
+| 19 | `load` → `binding(19)` | 加载 `b[ABSOLUTE_POS]` |
+| 24 | `load` → `binding(24)` | 加载 `c[ABSOLUTE_POS]` |
+| **25** | **`binding(25) = binding(19) * binding(24)`** | **`b[ABSOLUTE_POS] * c[ABSOLUTE_POS]`** ← Mul 先注册 |
+| **26** | **`binding(26) = binding(14) + binding(25)`** | **`a[ABSOLUTE_POS] + (b*c)`** ← Add 后注册 |
+| 30 | `store(binding(30), binding(26))` | `output[ABSOLUTE_POS] = 结果` |
+
+**关键观察**：第 25 行 `Mul(f32, f32)` 在第 26 行 `Add(f32, f32)` 之前——验证了 Rust 的运算符优先级（`a + b * c` 中 `b * c` 先求值），proc-macro 的 expand 忠实地反映了这一顺序。
+
+## 与宏展开的对应
+
+在 `Expression::to_tokens` 中（`cubecl-macros/src/generate/expression.rs:56-78`），`a + (b * c)` 的 AST 是：
+```
+Expression::Binary {
+    left: a,
+    operator: Add,
+    right: Expression::Binary { left: b, operator: Mul, right: c }
+}
+```
+
+`Add` 的左子树先 to_tokens，但它调用了 `.into_expand()` 而非触发 depend 求值；实际上 `.into_expand()` 只是把值包装为 `NativeExpand`，不生成 IR。真正的 IR 注册发生在 `Add` 的右子树求值时——`b.__expand_mul_method(scope, c)` 先执行（注册 `Operation::Arithmetic(Mul, ...)`），然后 `a.__expand_add_method(scope, result_of_mul)` 才执行。
+
+这一机制的源码在 `cubecl-core/src/frontend/element/base.rs` 的各个 `__expand_*_method` 实现中——每个方法都是先 `into_expand` 自己的参数，然后**立即**调用 `scope.register(Operation::Arithmetic(op, output))` 向 scope 注入指令。

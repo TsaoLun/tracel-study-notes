@@ -125,7 +125,76 @@ model.onnx → build.rs → model.rs + model.bpk → 普通 Burn 代码
 
 ---
 
-## 六、推迟的边界：什么不能推迟
+## 六、一次 matmul 穿过四层：完整的决策推迟之旅
+
+抽象的"决策推迟"在具体操作中是什么样子？以 Burn 用户写 `tensor.matmul(&other)` 为例，追踪它依次经过的推迟层：
+
+```
+用户代码: tensor.matmul(&other)
+    │
+    ├─ [L1 编译期] Burn 类型栈
+    │   rustc 单态化: Autodiff<Fusion<CubeBackend<CudaRuntime>>>
+    │   → tensor 的类型在编译期固定，matmul dispatch 消解为函数指针
+    │
+    ├─ [L1 编译期] Autodiff 层
+    │   Autodiff::float_matmul:
+    │     1. 调用 inner.matmul() → 交给 Fusion 层
+    │     2. 注册 MatmulBackward 到梯度图
+    │   → 前向和反向图的注册是编译期决定的，但梯度图本身是运行时构造的
+    │
+    ├─ [运行时-惰性] Fusion 层
+    │   FusionBackend::float_matmul:
+    │     1. 将 OperationIr::Matmul { lhs, rhs, out } 入队到当前流的 OperationQueue
+    │     2. 不执行 → 等到 drain 时才处理
+    │   → 融合决策推迟到入队后：Explorer 扫描 OperationQueue 决定哪些操作可以合并
+    │
+    ├─ [运行时-drain] Fusion drain
+    │   MultiStream::drain → Processor::process:
+    │     1. Policy 决定 Explore/Execute/Defer
+    │     2. Explorer 用 StreamOptimizer 注册 op 到 Block
+    │     3. Block::optimize 用 find_best_optimization_index 选最佳 builder
+    │     4. 若与前后操作可融合→ 生成 FuseTrace；否则 ExecutionStrategy::Operations
+    │   → 多操作融合成 FuseTrace: Clone + ScalarMul + ScalarAdd + Tanh → elemwise_fuse
+    │
+    ├─ [运行时] CubeK 层
+    │   Fusion drain 后的操作交给 CubeK:
+    │     1. matmul 走到 cubek-matmul → 查当前 (M,N,K,dtype) 是否有 autotune 缓存
+    │     2. 若缓存命中: 直接用最快 blueprint + tile 配置
+    │     3. 若缓存缺失: autotune benchmark 候选 Strategy
+    │   → Strategy::Auto 先试 SimpleCyclicCmma，硬件不支持则退到 SimpleUnit
+    │
+    ├─ [L2 JIT] CubeCL JIT 编译
+    │   KernelLauncher::launch → CubeCL runtime:
+    │     1. 计算 JIT key = (kernel, comptime, vectorization, cube_dim, ...)
+    │     2. 缓存 miss → 调用 kernel.define() → expand 填入 Scope
+    │     3. cubecl-opt: parse_graph → SSA → 定点循环(10 passes)
+    │     4. CppCompiler<CudaDialect> → NVRTC → PTX → 写入 CompilationCache
+    │   → matmul 的计算逻辑从 Rust #[cube] 变成 PTX 机器码
+    │
+    └─ [L3 首次执行] Autotune（若 matmul 未缓存）
+        1. 对每个候选 TileKind (CMMA, PlaneVec, Register) → 各 benchmark 一次
+        2. 缓存最快候选索引，后续 launch 直接用
+        → 找的不是"哪个实现最快"，是"在这个特定 GPU 上，对 (M,N,K) 这个大小，
+           是 CMMA tile 快还是 PlaneVec tile 快"
+```
+
+每一步的决策时机不同，但顺序一致：编译期 → 惰性入队 → drain 融合 → JIT 编译 → autotune。每一步只对下一步可见，不穿透多层——Fusion 不知道 CubeCL 的 SSA 定点循环在做什么，CubeCL 不知道 Burn 的梯度图怎么记录的。
+
+### 数据流中的关键交接
+
+| 层间切换 | 交接物 | 内部表示变化 |
+|----------|--------|-------------|
+| Burn → Autodiff | `FloatTensor<Autodiff<B>>` | `AutodiffTensor { primitive: ..., node: NodeRef }` |
+| Autodiff → Fusion | `FloatTensor<Fusion<B>>` | `FusionTensor { id: TensorId, stream: StreamId }` |
+| Fusion → CubeK | `OperationIr` + `TensorId → Handle` 映射 | `FuseTrace { blocks, resources }` |
+| CubeK → CubeCL | `KernelLauncher` + `KernelSettings` | `KernelDefinition { body: Scope }` |
+| CubeCL → GPU | `KernelId` + `CompiledKernel` | PTX / WGSL / SPIR-V |
+
+每次交接在源代码中都对应一次 trait 方法调用——`Backend::float_matmul` → `FusionBackend::float_matmul` → `FusionRuntime` trait 的实现 → `CubeKernel::define()`。trait 是各层之间的硬边界。
+
+---
+
+## 七、推迟的边界：什么不能推迟
 
 四层推迟的共同前提是：**推迟后的决策条件必须在推迟到的时机仍然可用**。
 
@@ -134,9 +203,21 @@ model.onnx → build.rs → model.rs + model.bpk → 普通 Burn 代码
 - **CubeK**：autotune 需要实际硬件执行 benchmark。在没有目标硬件的 CI 环境，autotune 只能跳过——退化为使用默认候选。
 - **Burn-ONNX**：AOT 编译需要 `build.rs` 能访问 ONNX 模型文件。模型路径在构建期确定——运行时换模型需要重新构建。
 
+### 推迟的隐性成本
+
+每层推迟机制都有"首次支付"特征——第一次遇到某组合时慢，后续快。这对生产部署的影响取决于调用模式：
+
+| 推迟层 | 首次成本 | 触发条件 | 缓解手段 |
+|--------|----------|----------|----------|
+| L1 编译期 | 编译时间（分钟级） | 每次 `cargo build` | 增量编译缓存 |
+| L2 JIT | JIT 编译 + SSA 优化（秒级） | 首次 launch 每个 (kernel, comptime, vec, cubdim) 组合 | `CompilationCache` 磁盘缓存 |
+| L3 Autotune | benchmark N 个候选（秒~分钟级） | 首次执行每个 (M,N,K,dtype,layout) 组合 | 指数分桶减少 key 空间；持久化 autotune 结果 |
+
+对于推理服务（固定模型 + 固定 batch size），三层推迟的成本只在首次请求时支付。对于训练（每次 batch 大小可能不同），autotune 的分桶策略（`#[autotune(anchor(...))]`）将连续的 `M` 值映射到离散桶，减少了需要 benchmark 的 unique key 数量。
+
 ---
 
-## 七、为什么推迟能正交组合
+## 八、为什么推迟能正交组合
 
 Tracel 生态的组件可以像积木一样组合（`Autodiff<Fusion<CubeBackend<CudaRuntime>>>`），是因为每层推迟的决策是**正交的**：
 
@@ -148,7 +229,7 @@ Tracel 生态的组件可以像积木一样组合（`Autodiff<Fusion<CubeBackend
 
 ---
 
-## 八、与其他生态的对比
+## 九、与其他生态的对比
 
 | 决策 | PyTorch | TensorFlow/XLA | Tracel |
 |------|---------|---------------|--------|

@@ -124,6 +124,36 @@ CubeCL 的命名故意不与任何平台对齐：
 
 ---
 
+## 为什么是 proc-macro 而不是 trait-based 注册——CubeCL 的设计选择
+
+一个常见的问题：如果 CubeCL 的目标是"写 Rust 然后在 GPU 上跑"，为什么不提供一个 Builder API 或者 trait 来注册 GPU 操作？比如：
+
+```rust
+// 假想的 trait-based 方案——实际不存在
+struct MyKernel;
+impl GpuKernel for MyKernel {
+    fn build(scope: &mut Scope) {
+        let a = scope.param::<f32>("a");
+        let b = scope.param::<f32>("b");
+        scope.register(Instruction::Add { lhs: a, rhs: b }, scope.output());
+    }
+}
+```
+
+CubeCL 选择 `#[cube]` proc-macro 而非 trait/builder，有三个结构性原因：
+
+1. **与 Rust 类型检查的集成**：proc-macro 保留原始函数——任何类型错误（`f32 + bool`、数组边界越界）由 rustc 直接报告，不需要框架定义自己的类型系统。Builder API 必须在运行时做类型检查（或自己实现一套编译期检查）。
+
+2. **comptime 的实现可行性**：`comptime!(2.0f32.sqrt())` 是**普通 Rust 代码**，在 expand 执行时由 Rust 运行时求值。如果使用 Builder API 在 proc-macro 中注册操作，`comptime!` 里的 Rust 代码就无法执行——proc-macro 运行的进程无权限执行任意 Rust 表达式。两阶段设计（proc-macro 生成 expand → expand 作为 Rust 函数执行）是 comptime 的前提条件。
+
+3. **控制流的自然表达**：`if plane { plane_sum(...) } else { sum_basic(...) }` 作为 Rust 控制流写起来自然。trait-based 注册需要用 `scope.if_else(condition, |then| { ... }, |else| { ... })` 的 Builder 风格——不是不行，但阅读体验和写错概率不同。
+
+代价是 proc-macro 的复杂度——`cubecl-macros` 需要实现一个完整的 Rust 子集解析器（AST → `Expression` 枚举），包括二元运算、方法调用、闭包、match、for 循环等。这是 CubeCL 最复杂的单个 crate。源码验证路径：`cubecl-macros/src/parse/expression.rs`（Expression 枚举）、`cubecl-macros/src/generate/expression.rs`（Expression::to_tokens 分发）。
+
+> 跟练验证：[第二章](2-expand.md) 的 `define()` 方法可以打印 expand 生成的 Scope，直观感受 `a + b * c` 从 Rust 表达式变成哪些 IR 指令。
+
+---
+
 ## JIT 管线：post-SSA 定点循环
 
 当 `launch` 第一次遇到某个 `(kernel, comptime, vectorization, cube_dim, …)` 组合时，`expand` 被调用填入 IR 指令，然后进入 `cubecl-opt`。

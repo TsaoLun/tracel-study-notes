@@ -1,7 +1,7 @@
 # CubeCL 专题 · 第二章：expand——`+` 如何变成 `__expand_add_method`
 
 > **本章锚点**：GELU 示例中 `x / Vector::new(sqrt2)` 这行代码，从 Rust 语法树到 IR 里的 `Operation::Arithmetic(Div, …)`，中间经过两层转换。  
-> **读完能干什么**：能读 `cubecl-macros/src/generate/expression.rs` 中的 `Expression::to_tokens` 匹配臂，解释为什么表达式不是「AST 直连 Operation」；能用 `ArithKernel::define()` 打印 expand 生成的 Scope。
+> **读完能干什么**：能读 `cubecl-macros/src/generate/expression.rs` 中的 `Expression::to_tokens` 匹配臂，解释为什么表达式不是「AST 直连 Operation」；能用 `ArithKernel::define()` 打印 expand 生成的 Scope；能读懂 CubeCL IR 文本格式。
 
 > **前置**：[第一章](1-gelu-launch.md)（launch 调用链、`expand` 何时被调用）。术语见 [summary 词汇表](summary.md#词汇说明表)。
 
@@ -14,6 +14,28 @@
 | [专题一](1-gelu-launch.md) | launch 调用链：`launch_unchecked` → `define()` → `expand` 在哪被调用 |
 | **本章** | expand 内部：表达式如何经两层方法调用最终向 `Scope` 注册 `Operation` |
 | [专题三](index.md#第三章待写新增) | trait/impl 与 `#[define]`——泛型 kernel 如何注册 |
+
+---
+
+## 先看产物：`a + b * c` 生成的 IR 长什么样
+
+在讨论"怎么做到的"之前，先看 expand 最终产出的东西。以下是在 `src/ch2-expand-study/` 中运行 `cargo test homework_2_ir_dump -- --nocapture` 捕获的完整 Scope 文本（完整文件：[../artifacts/arith-ir.txt](../artifacts/arith-ir.txt)）：
+
+```
+{
+    binding(0) = buffer_len(global(0)) : (array<f32, global<0>>) -> (u32)
+    ptr<slice>(1) = aggregate(global(0), u32(0), binding(0)) : () -> (array<f32, global<0>>)
+    ...
+    binding(19) = load(binding(18)) : (ptr<f32, global<1>>) -> (f32)    ← b[ABSOLUTE_POS]
+    binding(24) = load(binding(23)) : (ptr<f32, global<2>>) -> (f32)    ← c[ABSOLUTE_POS]
+    binding(25) = binding(19) * binding(24) : (f32, f32) -> (f32)       ← Mul 先注册
+    binding(26) = binding(14) + binding(25) : (f32, f32) -> (f32)       ← Add 后注册
+    ...
+    store(binding(30), binding(26))
+}
+```
+
+注意第 25 行和第 26 行：`binding(25) = binding(19) * binding(24)`（Mul）在 `binding(26) = binding(14) + binding(25)`（Add）**之前**。这不是巧合——Rust 的运算符优先级 `a + b * c` 中 `b * c` 先求值，proc-macro 忠实地保留了这个顺序。本章的核心就是解释：这一行 IR `binding(25) = binding(19) * binding(24)` 是从 Rust `a[ABSOLUTE_POS] + b[ABSOLUTE_POS] * c[ABSOLUTE_POS]` 中的 `b * c` 出发，经过两层转换才最终以 `scope.register(Instruction(Arithmetic::Mul, output))` 的形式写入 Scope 的。
 
 ---
 
@@ -34,6 +56,47 @@
 第 2 层的代码是在 expand 函数里**真正执行的 Rust 代码**——它在 JIT 时运行，通过 `__expand_add_method` → `binary_expand` → `scope.register(Instruction(Arithmetic::Add, output))` 把指令写入 IR。
 
 **关键洞察**：proc-macro 不直接把 `a + b` 翻译成 `Operation::Arithmetic(Add, …)`。它翻译成一个**方法调用链**——`into_expand` 把值包装成 `NativeExpand`，`__expand_add_method` 在该包装上注册 Operation。两层之间存在一个**方法分发层**，这使不同类型的值（标量、向量、tensor）可以有不同的 expand 行为。
+
+---
+
+## 为什么用两层？——设计动机
+
+这里有一个值得展开的设计问题：**proc-macro 为什么不直接把 AST 节点一对一映射为 `Operation` 枚举构造调用，而要生成一个方法链？**
+
+以 `a + b` 为例，"直译"方案是：
+
+```rust
+// 假想的「直译」方案——实际不存在
+scope.register(Operation::Arithmetic(Add, BinaryOperands {
+    lhs: a.into_expand(scope).expand,  // ← 需要先拿到 Variable
+    rhs: b.into_expand(scope).expand,
+}), output);
+```
+
+直译方案需要在 proc-macro 内部决定 3 件事：
+1. 用哪个 `Operation` 变体（`Arithmetic`、`Bitwise`、`Comparison`……）
+2. 如何构造操作数（`BinaryOperands` 还是 `UnaryOperands`）
+3. 输出的 `Variable` 如何分配
+
+而实际的两层方案**把这三件事的决策推迟到 trait 分发层**：
+
+```rust
+// 实际生成的代码（在 expand 函数内）
+LeftExpandType::into_expand(left, scope).__expand_add_method(scope,
+    RightExpandType::into_expand(right, scope))
+```
+
+推迟带来的好处：
+
+1. **类型自适应**：`f32` 的 `__expand_add_method` 注册 `Arithmetic::Add(f32, f32)`；`Vector<f32, 4>` 的同一方法注册 `Arithmetic::Add(f32x4, f32x4)`——proc-macro **不需要知道**操作数类型，Rust 的 trait 分发在 expand 执行时自动选对。
+
+2. **操作语义可扩展**：新增一种类型（如 `BF16`）只需在 `cubecl-core` 里为它实现 `__expand_add_method` 等一系列方法，proc-macro 代码不需要改动。如果 proc-macro 直译 `Operation::Arithmetic(Add, ...)`，每加一种类型就要改宏代码。
+
+3. **简化 proc-macro 逻辑**：proc-macro 不需要理解"这个操作应该生成算术指令还是位运算指令"——它只需要知道"二元表达式 → `__expand_{op}_method`"，剩下的由 trait 分发解决。这使得 `expression.rs` 中的 `Binary` 分支可以写成一行：`left.__expand_add_method(scope, right)`，而不用写 `match (left_type, right_type) { (f32, f32) => ..., (Vector<f32,4>, Vector<f32,4>) => ..., ... }`。
+
+4. **允许操作间的中间表示**：`into_expand` 返回的 `NativeExpand<T>` 不是裸 `Variable`——它携带类型标记 `PhantomData<T>` 和 scope 上下文。后续的 `__expand_add_method` 可以据此在 `Scope` 里分配正确类型的输出 `Variable`，并选择正确的 `Operation` 变体。
+
+以 Rust 编译器的术语来说，这相当于在 proc-macro（前端）和 cubecl-core（后端）之间放了一个 **trait-based IR builder**：前端生成方法调用，后端实现这些方法。
 
 ---
 
@@ -176,46 +239,62 @@ where F: Fn(BinaryOperands) -> Op, Op: Into<Operation>,
 
 ---
 
-## 完整旅程：`a + b` 从源码到 IR
+## 完整旅程：`a + b * c` 从源码到 IR——验证
 
-以 GELU 的 `x / Vector::new(sqrt2)` 为例（其中 `/` 走同一路径，`operator` 为 `Div`，对应 `__expand_div_method` → `Arithmetic::Div`）：
+以作业 kernel `output[ABSOLUTE_POS] = a[ABSOLUTE_POS] + b[ABSOLUTE_POS] * c[ABSOLUTE_POS]` 为例：
 
 ```
-源码: x / sqrt2_vec
+源码: a[ABSOLUTE_POS] + b[ABSOLUTE_POS] * c[ABSOLUTE_POS]
 
 1. parse: Expression::from_expr
    → Expression::Binary {
-       left: Variable(x),
-       operator: Div,
-       right: FunctionCall(Vector::new, [sqrt2]),
-       span: …
+       left: IndexAccess(a, ABSOLUTE_POS),
+       operator: Add,
+       right: Expression::Binary {
+           left: IndexAccess(b, ABSOLUTE_POS),
+           operator: Mul,
+           right: IndexAccess(c, ABSOLUTE_POS)
+       }
      }
 
-2. generate: Expression::to_tokens 生成的 Rust 代码（在 expand 函数内）:
-   → IntoExpand::into_expand(x, scope)
-       .__expand_div_method(scope,
-         IntoExpand::into_expand(Vector::new(…), scope))
+2. generate: Expression::to_tokens 对 Add 节点：
+   - 先 to_tokens 右子树（Mul 节点）
+       → b.__expand_mul_method(scope, c) 先生成
+   - 然后 left 的 into_expand
+       → a.into_expand(scope)
+   - 最后组合
+       → a.into_expand(scope).__expand_add_method(scope, b.__expand_mul_method(scope, c))
 
-3. JIT 时 expand 执行:
-   x.into_expand(scope) → NativeExpand<f32> { expand: Variable(id=3), … }
-   sqrt2_vec → NativeExpand<Vector<f32,4>> { expand: Variable(id=7), … }
-
-   x.__expand_div_method(scope, sqrt2_vec)
-     → binary_expand(scope,
-         var(id=3),           // lhs: Variable
-         var(id=7),           // rhs: Variable
-         Arithmetic::Div,     // op 构造器
-       )
-
-4. binary_expand:
-   - let output = scope.create_local(Type::Scalar(f32));  // 分配新 Variable(id=10)
-   - scope.register(Instruction(Arithmetic::Div {
-         lhs: var(3), rhs: var(7)
-     }, output=var(10)));
-   - return var(10)
-
-5. 返回值继续传递给下一个操作（* 或 +）
+3. JIT 时 expand 实际执行（按 IR 顺序）：
+   binding(19) = load(b[ABSOLUTE_POS])   # b 的值
+   binding(24) = load(c[ABSOLUTE_POS])   # c 的值
+   binding(25) = binding(19) * binding(24)  # ← Mul 先执行
+   binding(14) = load(a[ABSOLUTE_POS])   # a 的值
+   binding(26) = binding(14) + binding(25)  # ← Add 后执行
+   store(output[ABSOLUTE_POS], binding(26))
 ```
+
+跟练时运行 `cargo test homework_2_ir_dump -- --nocapture` 可亲眼看到这段 IR 输出（完整产物见 [../artifacts/arith-ir.txt](../artifacts/arith-ir.txt)）。
+
+---
+
+## 从 IR 到 WGSL：expand 的产物去哪了
+
+上面生成的 Scope（IR）下一步会进入 `cubecl-opt` 的定点循环优化，然后由 `WgslCompiler` 生成着色器代码。以 `arith_kernel` 为例，一个简化的对应关系：
+
+```
+CubeCL IR                                   WGSL
+──────────────────────────────────────────  ────────────────────────────
+global(0), global(1), ...                  @group(0) @binding(0) var<storage> buffer_0: ...
+AbsolutePos                                let id = global_id.x * ... + local_id.x
+binding(19) = load(b[...])                 let l_19 = buffer_1[id];
+binding(24) = load(c[...])                 let l_24 = buffer_2[id];
+binding(25) = binding(19) * binding(24)    let l_25 = l_19 * l_24;
+binding(26) = binding(14) + binding(25)    let l_26 = l_14 + l_25;
+store(output[...], binding(26))            buffer_3[id] = l_26;
+```
+
+> 完整的 GELU kernel WGSL 产物见 [Nihal Pasham 的 artifact gist](https://gist.github.com/nihalpasham/0ed25f2dbcb08278f79d6ceabf38a60b)，展示了 `#[cube]` kernel 经 WGSL 编译后的完整着色器代码。仓库本地的 WGSL 产物生成命令待参考仓库编译完成后补充至 `docs/artifacts/`。
 
 ---
 
@@ -324,9 +403,7 @@ let kernel = arith_kernel::ArithKernel::<f32, cubecl::cpu::CpuRuntime>::new(
 println!("{}", kernel.define().body); // Scope 实现了 Display
 ```
 
-宏还支持 `#[cube(launch, create_dummy_kernel)]`，会额外生成 `create_dummy_kernel(...)` 辅助函数；但 **`define()` 仍需要带 `device_properties` 的 `ComputeClient`**，跟练时直接 `ArithKernel::new` + `define()` 更直观。
-
-CubeCL 还提供 `#[cube(create_dummy_kernel)]` 属性（见 `cubecl-macros` 文档），用于测试 harness——与上述 `define()` 路径目的一致。
+上面这段会打印出本章开头展示的 IR 文本。宏还支持 `#[cube(launch, create_dummy_kernel)]`，会额外生成 `create_dummy_kernel(...)` 辅助函数；但 **`define()` 仍需要带 `device_properties` 的 `ComputeClient`**，跟练时直接 `ArithKernel::new` + `define()` 更直观。
 
 ---
 
@@ -358,8 +435,12 @@ Expression::FunctionCall { func, args, associated_type: None, .. } => {
 | `__expand_*_method` 实际执行 → `scope.register(Instruction(...))` | 首次 JIT miss 时（`define()` 内） | `cubecl-core`（host CPU 上执行） |
 | `binary_expand` 分配输出 Variable | 首次 JIT miss 时 | `cubecl-core` |
 | `Operation::Branch(...)` 注册 | 首次 JIT miss 时 | `cubecl_ir::branch` |
+| SSA 定点循环优化 | 首次 JIT miss 时（`define()` 之后） | `cubecl-opt` |
+| IR → WGSL/CUDA/SPIR-V 代码生成 | 首次 JIT miss 时（优化之后） | `cubecl-wgpu` / `cubecl-cuda` / … |
 
 **关键洞察**：proc-macro 做的事（两层转换）和 expand 做的事（注册 Instruction）发生在**完全不同的时间**。proc-macro 在 `cargo build` 时就完成了——它生成了一段 Rust 代码（`__expand_add_method` 调用链）。这段代码在首次 launch 的 JIT miss 时才真正执行，向 `Scope` 注册 `Instruction`。理解这个时间差，就理解了为什么 `comptime!` 里的代码能在 expand 执行时读取当前硬件属性——它运行在 JIT 编译的 host 端，不是 `cargo build` 时。
+
+这也是"两层转换"的设计动机之一：parse + generate 在编译期完成，产出的是**一段可执行的 Rust 代码**而非静态 IR。这段代码在 JIT 时执行，可以根据运行时信息（当前硬件、comptime 参数）动态决定生成什么 IR。如果 proc-macro 直接产出 IR（直译方案），`comptime` 就不可能了——IR 在 `cargo build` 时就固定了。
 
 ---
 
@@ -370,6 +451,7 @@ Expression::FunctionCall { func, args, associated_type: None, .. } => {
 3. **核心函数**：`binary_expand` 分配输出变量、构造 `BinaryOperands`、调用 `scope.register(Instruction(op, output))`。
 4. **控制流**：`if` 展开为 `branch::if_expand`（注册 `Operation::Branch`），闭包确保 then/else 块各自独立向 `Scope` 注册指令。
 5. **短路逻辑**：`&&`/`||` 被消解为 `if/else` 表达式，天然惰性求值。
+6. **设计动机**：两层转换不是多此一举——它把"对什么类型注册什么 Operation"的决策从 proc-macro 推迟到 Rust trait 分发，使 proc-macro 保持简单、类型可扩展、comptime 成为可能。
 
 ---
 
@@ -385,6 +467,8 @@ Expression::FunctionCall { func, args, associated_type: None, .. } => {
    - **步骤三** `homework_2_ir_analysis`：阅读概念题参考答案
 
 3. （选做）跟踪 `into_expand` 在 `cubecl-core/src/frontend/element/base.rs` 中的 trait 定义。列出至少 3 种实现了 `IntoExpand` 的类型，说明它们各自 `into_expand` 的行为差异。
+
+4. （选做）阅读 [../artifacts/arith-ir.txt](../artifacts/arith-ir.txt) 的完整 IR 内容，尝试将每行 IR 映射回对应的 Rust 源码表达式。验证 Mul 在 Add 之前的 IR 顺序。
 
 ---
 

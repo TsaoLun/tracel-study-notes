@@ -349,6 +349,50 @@ Fusion 层拿到 buffer handle 后，通过 `client.register_tensor_handle(handl
 
 ---
 
+## 融合验证：看生成着色器
+
+说"四个操作融合成一个 kernel"——怎么确认？最直接的方式是看生成的 Metal/WGSL 着色器代码。以下是 `RUST_LOG=wgpu_hal::metal=trace` 输出中捕获的生成 Metal 着色器片段（三个操作：`* 2.0` + `+ 1.0` + `tanh`，`from_data` 不算操作因为它是 NoOp）：
+
+```cpp
+metal::float2 l_10_ = buffer_0_global[id];      // ← 读取 tensor_1
+float _e66 = scalars_f32_.inner[0];              // ← 标量 2.0
+metal::float2 l_13_ = l_10_ * _e66;              // ← * 2.0
+float _e70 = scalars_f32_.inner[1];              // ← 标量 1.0
+metal::float2 l_16_ = l_13_ + metal::float2(_e70); // ← + 1.0
+metal::float2 _e73 = safe_tanh(l_16_);           // ← tanh
+```
+
+在同一个 `elemwise_fuse` 入口点内完成了三次独立的数学运算——中间结果 `l_13_` 和 `l_16_` 全部保留在寄存器中，不需要写回全局内存。这正是融合的价值：GPU 无需在每个操作后写回 VRAM。
+
+> 完整着色器代码待编译完成后存入 `docs/artifacts/elemwise-fuse-metal.metal`。当前可通过 `RUST_LOG=wgpu_hal::metal=trace,cubecl_wgpu::runtime=trace cargo run --release 2>&1 | grep "Naga generated shader" -A 30` 自行捕获。
+
+Nihal Pasham 在 [How does automatic kernel fusion work in burn](https://gist.github.com/nihalpasham/fc128f074e20d880bfd97198c2ac784b) 中也捕获了同样的着色器片段，并记录了对应的 RUST_LOG 输出：
+
+```
+[2025-06-30T07:48:56Z TRACE burn_fusion::stream::store::base] New execution plan 1 - Operations: 3 - Triggers 1
+[2025-06-30T07:48:56Z DEBUG wgpu_hal::metal::device] Naga generated shader for entry point 'elemwise_fuse' and stage Compute
+```
+
+第一条日志：Fusion 层确认"3 个操作融合成 1 个执行计划"。第二条：GPU 后端生成了一个名为 `elemwise_fuse` 的着色器——注意是**一个**入口点，不是三个。
+
+---
+
+## 为什么 channel 而不是 Mutex——v0.21.0 的架构动机
+
+v0.21.0 之前，`FusionServer` 通过 `Arc<Mutex<FusionServer<R>>>` 包装。`MutexFusionClient`（旧命名中的 `Mutex`）在每次 `register` 和 `drain` 时获取锁。
+
+切换到 `DeviceHandle`（worker channel + 线程池）的动机与融合 Pipeline 的设计约束直接相关：
+
+1. **避免递归锁**：旧架构中，`drain` 期间 `FusionServer` 持有锁，而 drain 内部会调用 CubeCL 的 `ComputeClient::launch`——如果 CubeCL 的 server 回调 Fusion 层（如访问共享 tensor），会产生递归锁。channel 架构中 `submit()` 是 fire-and-forget，不存在锁持有者。
+
+2. **解除 Fusion 与 CubeCL 的耦合阻塞**：旧架构中 Fusion 持有 Mutex、CubeCL 持有自己的锁——两者需要协调时变成双层锁。DeviceServiceStage 把两者排成流水线：Fusion 的 worker 线程处理完一批就交给 CubeCL 的 worker 线程，处理完的线程立即接下一批——不互相阻塞。
+
+3. **传输开销可控**：channel 传递闭包有序列化成本。这就是 `client.rs:121-136` 中大小判断优化的由来——小 op 类型直接传（简单闭包捕获），大 op 在客户端预先包装为 `UnfusedOp`（减少闭包大小）。
+
+理解这个架构变迁的关键不是"channel 比 mutex 好"，而是**在 eager-only 的 Backend trait 约束下叠加惰性融合**，channel 的 fire-and-forget 语义恰好匹配"入队操作不需要等待计算完成"的需求。这正是 Burn Fusion 作为中间层的设计出发点。
+
+---
+
 ## 读张量时，drain 才发生：`FusionServer::read_float`
 
 前面的 `println!("{}", z)` 触发读张量。一路走到 `FusionServer::read_float`——它揭示了 drain 的精确时机（`burn/crates/burn-fusion/src/server.rs`）：

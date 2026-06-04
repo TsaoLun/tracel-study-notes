@@ -127,6 +127,93 @@ fn gelu_scalar<F: Float, N: Size>(x: Vector<F, N>) -> Vector<F, N> {
 
 ---
 
+## `#[cube(launch)]` 到底生成了什么——宏展开产物的结构
+
+理解两层世界的最好方式不是读文档，而是**看 proc-macro 的实际输出**。`#[cube(launch)] fn gelu_array` 被宏展开为一个 Rust 模块，结构如下（简化，完整展开见 `cargo expand` 输出）：
+
+```rust
+pub mod gelu_array {
+    use super::*;
+
+    // 1. 保留原始函数（用于 Rust 类型检查）
+    #[allow(unused)]
+    fn gelu_array<F: Float>(input: &[Vector<F, N>], output: &mut [Vector<F, N>]) {
+        if ABSOLUTE_POS < input.len() {
+            output[ABSOLUTE_POS] = gelu_scalar(input[ABSOLUTE_POS]);
+        }
+    }
+
+    // 2. 生成 expand 函数（重写参数签名为 ExpandType）
+    #[allow(unused, clippy::all)]
+    fn expand<F: Float>(
+        scope: &Scope,
+        input: <Array<Vector<F,N>> as CubeType>::ExpandType,
+        output: <Array<Vector<F,N>> as CubeType>::ExpandType,
+    ) {
+        // 原函数体中的 + → __expand_add_method(scope, ...)
+        // 原函数体中的 if → branch::if_expand(scope, ...)
+        // 原函数体中的 ABSOLUTE_POS → Variable::Builtin(AbsolutePos)
+    }
+
+    // 3. Kernel 结构体（实现 CubeKernel trait）
+    pub struct GeluArray<F: Float, R: Runtime> {
+        settings: KernelSettings,
+        args: (/* 每个参数的 BufferCompilationArg */),
+        debug_name: Option<&'static str>,
+    }
+
+    // 4. Kernel trait 实现（提供 define() 和 id()）
+    impl<F: Float, R: Runtime> CubeKernel for GeluArray<F, R> {
+        fn define(&self) -> KernelDefinition {
+            let mut scope = Scope::new(/* ... */);
+            // 注册 buffer 参数
+            expand::<F>(&scope, /* input_expand, output_expand */);
+            // builder.build(scope) → KernelDefinition
+        }
+        fn id(&self) -> KernelId {
+            KernelId::new::<Self>()  // 参与 JIT 缓存 key
+        }
+    }
+
+    // 5. launch 入口
+    pub fn launch<F: Float, R: Runtime>(
+        client: &ComputeClient<R>,
+        cube_count: CubeCount,
+        cube_dim: CubeDim,
+        input: BufferArg<R>,   // ← 每个 buffer 参数对应一个
+        output: BufferArg<R>,
+    ) {
+        let kernel = GeluArray::new(settings, client, input, output);
+        KernelLauncher::launch(kernel, client, cube_count, cube_dim, /* ... */);
+    }
+
+    // 6. launch_unchecked（跳过向量化等安全检查）
+    pub unsafe fn launch_unchecked<F: Float, R: Runtime>(
+        client: &ComputeClient<R>,
+        cube_count: CubeCount,
+        cube_dim: CubeDim,
+        // ... buffer 参数 ...
+    ) { /* 同上但跳过安全验证 */ }
+}
+```
+
+模块内部六个组件各有不同的时机：
+
+| 组件 | 编译/运行时机 | 用途 |
+|------|-------------|------|
+| 原始函数 | `cargo build`（类型检查） | 确保 kernel 写法合法 |
+| `expand` | 首次 JIT miss（host CPU 执行） | 填 `Scope`，生成 IR |
+| `GeluArray` struct | `cargo build`（类型生成） | 包装 settings + buffer 参数 |
+| `define()` | 首次 JIT miss（调用 expand → scope → build） | 生成 `KernelDefinition` |
+| `launch` | 每次 host 调用 | 入口点，创建 KernelLauncher |
+| `launch_unchecked` | 每次 host 调用 | 跳过安全检查的版本 |
+
+最关键的观察：**`gelu_array` 的原始函数体（第 1 部分）** 被保留但**从未在运行时被调用**——它的存在仅为 Rust 类型检查。真正被执行的是 **`expand` 函数（第 2 部分）**，它在 JIT 时运行，把操作记录到 `Scope`。这是 CubeCL "你写的是 IR 生成器" 的具体体现。
+
+> 跟练：在 cubecl 仓库中运行 `cargo expand --example gelu`（需 nightly）查看完整宏展开产物。完整展开含类型别名、泛型约束、`KernelSettings` 的详细字段等，比上述简化版长约 10 倍。产出存档于 [docs/artifacts/](../artifacts/README.md)（待跟练验证后补充）。
+
+---
+
 ## 读 host：`launch` 如何把数据交给 kernel
 
 ```rust
