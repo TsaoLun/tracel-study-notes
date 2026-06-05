@@ -4,7 +4,7 @@
 
 - **本文覆盖**：Burn、CubeCL、CubeK、Burn-ONNX 四个项目共享的设计哲学——将决策从"写代码时"推迟到"编译时 / JIT 时 / 首次执行时"。本文是跨项目的地图，解释四个项目如何通过同一原则解决不同层次的问题。
 - **建议读完**：各项目的地图文档（[Burn](burn/summary.md)、[CubeCL](cubecl/summary.md)）后再读本文，看到共同模式。
-- **不是**：逐个 API 的教程。本文关注设计层面的共性——读完应能解释"为什么 Tracel 生态的组件可以自由组合而不互相冲突"。
+- **读者定位**：本文关注设计层面的共性——读完应能解释"为什么 Tracel 生态的组件可以自由组合而不互相冲突"。各项目的具体机制分析见对应地图文档。
 
 ---
 
@@ -174,7 +174,7 @@ model.onnx → build.rs → model.rs + model.bpk → 普通 Burn 代码
     └─ [L3 首次执行] Autotune（若 matmul 未缓存）
         1. 对每个候选 TileKind (CMMA, PlaneVec, Register) → 各 benchmark 一次
         2. 缓存最快候选索引，后续 launch 直接用
-        → 找的不是"哪个实现最快"，是"在这个特定 GPU 上，对 (M,N,K) 这个大小，
+        → autotune 回答的是"在这个特定 GPU 上，对 (M,N,K) 这个大小，
            是 CMMA tile 快还是 PlaneVec tile 快"
 ```
 
@@ -225,7 +225,7 @@ Tracel 生态的组件可以像积木一样组合（`Autodiff<Fusion<CubeBackend
 - CubeCL 的 JIT 在 L2 编译——它不关心 kernel 是被 Fusion 合并来的还是直接 launch 的
 - CubeK 的 autotune 在 L3 benchmark——它不关心 kernel 是用 `#[cube]` 手写的还是 ONNX AOT 生成的
 
-每层只看到下层提供的 trait 接口，不穿透到下层内部。这种分层约束不是偶然的——它是 `Backend` trait 的拆分设计（1 + 8 个超 trait）和 CubeK 的 Blueprint-Routine-Autotuner 三层纪律共同保证的。
+每层只看到下层提供的 trait 接口，不穿透到下层内部。这种分层约束由 `Backend` trait 的拆分设计（1 + 8 个超 trait）和 CubeK 的 Blueprint-Routine-Autotuner 三层纪律共同保证。
 
 ---
 

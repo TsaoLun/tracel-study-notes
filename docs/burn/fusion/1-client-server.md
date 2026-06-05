@@ -212,7 +212,7 @@ pub struct WgpuServer<C: WgpuCompiler> {
 - `scheduler: SchedulerMultiStream<...>` — 多流调度器，管理 GPU 上的并发执行
 - `pipelines` — kernel 编译缓存：`KernelId` → 编译好的 `ComputePipeline`
 
-Fusion 层和 CubeCL 层的通信不是嵌套锁——是 **worker channel + 流水线**。`submit()` 把任务放进 channel，worker 线程取出执行，客户端不等结果。只有读数据时走 `submit_blocking()`，客户端阻塞等结果。
+Fusion 层和 CubeCL 层的通信走 **worker channel + 流水线**。`submit()` 把任务放进 channel，worker 线程取出执行，客户端不等结果。只有读数据时走 `submit_blocking()`，客户端阻塞等结果。
 
 ---
 
@@ -389,7 +389,7 @@ v0.21.0 之前，`FusionServer` 通过 `Arc<Mutex<FusionServer<R>>>` 包装。`M
 
 3. **传输开销可控**：channel 传递闭包有序列化成本。这就是 `client.rs:121-136` 中大小判断优化的由来——小 op 类型直接传（简单闭包捕获），大 op 在客户端预先包装为 `UnfusedOp`（减少闭包大小）。
 
-理解这个架构变迁的关键不是"channel 比 mutex 好"，而是**在 eager-only 的 Backend trait 约束下叠加惰性融合**，channel 的 fire-and-forget 语义恰好匹配"入队操作不需要等待计算完成"的需求。这正是 Burn Fusion 作为中间层的设计出发点。
+理解这个架构变迁的线索是：**如何在 eager-only 的 Backend trait 约束下叠加惰性融合**。channel 的 fire-and-forget 语义恰好匹配"入队操作不需要等待计算完成"的需求——这正是 Burn Fusion 作为中间层的设计出发点。
 
 ---
 

@@ -129,7 +129,7 @@ fn gelu_scalar<F: Float, N: Size>(x: Vector<F, N>) -> Vector<F, N> {
 
 ## `#[cube(launch)]` 到底生成了什么——宏展开产物的结构
 
-理解两层世界的最好方式不是读文档，而是**看 proc-macro 的实际输出**。`#[cube(launch)] fn gelu_array` 被宏展开为一个 Rust 模块，结构如下（简化，完整展开见 `cargo expand` 输出）：
+理解两层世界的直接方式是**看 proc-macro 的实际输出**。`#[cube(launch)] fn gelu_array` 被宏展开为一个 Rust 模块，结构如下（简化，完整展开见 `cargo expand` 输出）：
 
 ```rust
 pub mod gelu_array {
@@ -365,7 +365,7 @@ builder.build(self.settings.clone())  // → KernelDefinition（仍是 IR 级描
 | cubecl-opt + 后端 codegen（PTX/WGSL/SIMD） | 首次 JIT miss 时（compile 路径） | `cubecl-opt` + 各后端 |
 | 磁盘缓存命中 | 同 kernel 键的第二次 launch | `CompilationCache` |
 
-**关键洞察**：你写的 `#[cube]` 函数体既不是 `cargo build` 时编译为 GPU 代码，也不是首次 launch 时直接翻译为 PTX。它是**一段在 JIT 时运行的程序**——执行后向 `Scope` 填入 IR 指令，再由 `cubecl-opt` 和后端编译器处理。这解释了为什么 `comptime!` 可以在 kernel 里做 `2.0f32.sqrt()` —— 它是在 host CPU 上、JIT 编译时执行的普通 Rust 代码。
+**关键洞察**：你写的 `#[cube]` 函数体是**一段在 JIT 时运行的程序**——执行后向 `Scope` 填入 IR 指令，再由 `cubecl-opt` 和后端编译器处理。它在 `cargo build` 时不产生 GPU 代码，在首次 launch 时才以 IR 的形式表达计算意图。这解释了为什么 `comptime!` 可以在 kernel 里做 `2.0f32.sqrt()` —— 它是在 host CPU 上、JIT 编译时执行的普通 Rust 代码。
 
 ---
 

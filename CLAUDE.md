@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 性质
 
-本仓库是 [Tracel](https://github.com/tracel-ai) 开源生态的源码级机制分析文档，不是 API 教程或宣传材料。覆盖 Burn（Rust DL 框架）、CubeCL（多平台 GPU 编译器）、CubeK（高性能算子库）、Burn-ONNX（AOT 模型导入）。
+本仓库是 [Tracel](https://github.com/tracel-ai) 开源生态的源码级机制分析文档，覆盖 Burn（Rust DL 框架）、CubeCL（多平台 GPU 编译器）、CubeK（高性能算子库）、Burn-ONNX（AOT 模型导入）。每篇文档以源码路径和可复验命令为论据，解释设计动机和实现链路。
 每篇文档覆盖一个主题的完整机制链路，读者读完应能解释"为什么这么设计"和"怎么做到的"。
 
 ## 架构

@@ -2,7 +2,7 @@
 
 > 深入 [Tracel](https://github.com/tracel-ai) 开源生态的源码级机制分析：Burn（Rust DL 框架）、CubeCL（多平台 GPU 编译器）、CubeK（高性能算子库）、Burn-ONNX（AOT 模型导入）。
 >
-> 不是 API 教程。是在 Rust 类型系统、编译器流水线、GPU JIT 的层面解释"为什么这么设计"和"怎么做到的"。
+> 在 Rust 类型系统、编译器流水线、GPU JIT 的层面解释"为什么这么设计"和"怎么做到的"。
 
 ---
 

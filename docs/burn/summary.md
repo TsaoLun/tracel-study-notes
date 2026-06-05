@@ -30,7 +30,7 @@ tensor.matmul(&other) → dispatch → Autodiff::float_matmul
 
 ## 核心结论
 
-> Burn 的 Backend trait 被设计为纯 eager 模式——所有 op 是无副作用的纯函数，全局没有可变图上下文。这使每个 decorator（Autodiff、Fusion）可以独立实现 trait 并选择性包装张量类型：Autodiff 只包装浮点（记录梯度图），Fusion 包装全部四种（但需后端额外实现 `FusionBackend` trait，不是所有后端都支持）。Fusion 的 channel 架构（v0.21.0）正是在 eager 约束上叠加惰性的自然方案——操作入队推迟到 drain 时才融合执行，worker channel 替换递归锁使 Fusion 与 GPU 执行可流水线并行。CubeCL 后端（WGPU/CUDA/CPU）和 Flex 后端（纯 Rust CPU，零拷贝视图）代表了两种不同的后端策略：前者靠 JIT 编译获得算子融合和 autotune，后者靠 Arc-COW 和 signed strides 获得零拷贝操作和嵌入部署能力。
+> Burn 的 Backend trait 被设计为纯 eager 模式——所有 op 是无副作用的纯函数，全局没有可变图上下文。这使每个 decorator（Autodiff、Fusion）可以独立实现 trait 并选择性包装张量类型：Autodiff 只包装浮点（记录梯度图），Fusion 包装全部四种（需后端额外实现 `FusionBackend` trait；`CubeBackend<R>` 和部分其他后端实现了该 trait，`Flex` 选择不实现）。Fusion 的 channel 架构（v0.21.0）在 eager 约束上叠加惰性——操作入队推迟到 drain 时才融合执行，worker channel 使 Fusion 与 GPU 执行可流水线并行。CubeCL 后端（WGPU/CUDA/CPU）和 Flex 后端（纯 Rust CPU，零拷贝视图）代表了两种不同的后端策略：前者靠 JIT 编译获得算子融合和 autotune，后者靠 Arc-COW 和 signed strides 获得零拷贝操作和嵌入部署能力。
 
 ---
 
@@ -93,7 +93,7 @@ impl<B: Backend, C: CheckpointStrategy> BackendTypes for Autodiff<B, C> {
 
 ## 三、Fusion：四种张量全部包装
 
-`Fusion<B>` 同样零大小。与 Autodiff 的一个关键差异：`Fusion<B>` 的泛型约束不是 `B: Backend`，而是 `B: FusionBackend`——一个独立 trait（`crates/burn-fusion/src/backend.rs`）。`FusionBackend` 要求后端额外实现 `BackendIr`（handle ↔ tensor 互转）和 `cast_float`（混合精度支持），并声明 `FullPrecisionBackend`（用于梯度累积）。不是所有后端都实现了这个 trait——`CubeBackend<R>` 实现了（在 `burn-cubecl/src/fusion.rs`），而 `Flex` 选择不实现（见下文）。
+`Fusion<B>` 同样零大小。与 Autodiff 的一个关键差异：`Fusion<B>` 的泛型约束是独立的 `FusionBackend` trait（`crates/burn-fusion/src/backend.rs`），而 Autodiff 的泛型约束是 `Backend`。`FusionBackend` 要求后端额外实现 `BackendIr`（handle ↔ tensor 互转）和 `cast_float`（混合精度支持），并声明 `FullPrecisionBackend`（用于梯度累积）。`CubeBackend<R>` 实现了该 trait（在 `burn-cubecl/src/fusion.rs`），`Flex` 选择不实现（见下文）。
 
 包装策略与 Autodiff 相反——四种张量全部换成 `FusionTensor`：
 
@@ -148,7 +148,7 @@ Flex 选择不实现 `FusionBackend` 是经过权衡的设计决策——其 ARC
 
 Fusion 层需要"拦截操作、推迟执行、批量提交"，这与 `Backend` trait 的 eager 语义直接冲突。解决方案是 **client-server channel 架构**——`Fusion<B>` 的 `float_matmul` 实现先按 eager 语义立即返回一个 `FusionTensor`（只分配 `TensorId`，不触发 GPU 计算），同时通过 channel 把操作闭包发给后台 `FusionServer`。Server 在自己的线程里积累操作、决定融合策略、批量提交给底层后端。前端满足 trait 的 eager 约定，后台做真正的惰性融合。
 
-这解释了 v0.21.0 从递归锁迁移到 worker channel 不仅是性能优化——它是唯一能使 eager trait + 惰性执行共存的架构。
+这解释了 v0.21.0 从递归锁迁移到 worker channel 的架构意义：它是使 eager trait 与惰性执行共存的直接方案，性能优化是附带收益。
 
 ---
 
