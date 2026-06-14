@@ -35,7 +35,7 @@
 }
 ```
 
-注意第 25 行和第 26 行：`binding(25) = binding(19) * binding(24)`（Mul）在 `binding(26) = binding(14) + binding(25)`（Add）**之前**。这不是巧合——Rust 的运算符优先级 `a + b * c` 中 `b * c` 先求值，proc-macro 忠实地保留了这个顺序。本章的核心就是解释：这一行 IR `binding(25) = binding(19) * binding(24)` 是从 Rust `a[ABSOLUTE_POS] + b[ABSOLUTE_POS] * c[ABSOLUTE_POS]` 中的 `b * c` 出发，经过两层转换才最终以 `scope.register(Instruction(Arithmetic::Mul, output))` 的形式写入 Scope 的。
+注意第 25 行和第 26 行：`binding(25) = binding(19) * binding(24)`（Mul）在 `binding(26) = binding(14) + binding(25)`（Add）**之前**。这是 Rust 运算符优先级的结果——`a + b * c` 中 `b * c` 先求值，proc-macro 忠实地保留了表达式的嵌套顺序。本章的核心就是解释：这一行 IR `binding(25) = binding(19) * binding(24)` 是从 Rust `a[ABSOLUTE_POS] + b[ABSOLUTE_POS] * c[ABSOLUTE_POS]` 中的 `b * c` 出发，经过两层转换才最终以 `scope.register(Instruction(Arithmetic::Mul, output))` 的形式写入 Scope 的。
 
 ---
 
