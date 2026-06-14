@@ -81,7 +81,7 @@
 
 | 概念 | 文章 | 小节 |
 |------|------|------|
-| 跨项目共性（Backend Decorator / JIT / minimal Blueprint） | [architecture](architecture.md) | §一 |
+| 正交分层：trait 边界 + 各项目核心理念出处 | [architecture](architecture.md) | 四个项目，各自的核心 |
 | Tracel vs PyTorch/XLA | [architecture](architecture.md) | §九 |
 
 ---

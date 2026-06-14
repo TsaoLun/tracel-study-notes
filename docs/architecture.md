@@ -1,144 +1,75 @@
-# 后端装饰器、JIT 编译、极简 Blueprint：Tracel 的跨项目共性
+# 正交分层：四个项目的交互边界
 
-> Burn 用 Backend Decorator 把后端选择推到编译期，CubeCL 用 JIT 把 GPU 指令生成推到首次 launch，CubeK 用 minimal Blueprint 把最优实现推到首次 benchmark。同一条共性——特殊化后移——在三个层次上以三种技术实现。
+> Burn、CubeCL、CubeK 解决的是不同层次的问题。但它们能像 `Autodiff<Fusion<CubeBackend<WgpuRuntime>>>` 一样自由叠加，是因为每个项目都有清晰的边界和独立的核心理念——不侵入上层的职责，不依赖下层的实现。
 
 ## 读前须知
 
-- **本文性质**：跨项目分析。Burn 自称 **Backend Decorator**，CubeK 自称 **strict separation of compile-time structure from execution parameters**，CubeCL 强调 **composable from Rust to GPU IR**。三个项目没有给这条共性统一命名，但它贯穿了全部四个仓库的设计。
-- **本文定位**：阅读路径的第一步。在深入具体系统之前建立跨项目坐标系——理解这四个项目为什么可以自由组合而不互相冲突。不需要先读其他文章。
+- **本文性质**：跨项目导航。用每个项目**自己的话**解释它的核心设计（附带原文档出处），然后展示它们如何通过 trait 边界正交组合。
+- **本文定位**：阅读路径的第一步。不需要先读其他文章——读完你能解释为什么 Burn 的类型栈组件可以像积木一样叠加。
 - **读完后**：按 [阅读路径](../README.md) 继续全景篇和各系统文章。
 
 ---
 
-## 核心主张
-
-> Burn、CubeCL、CubeK 用三种技术解决同一类问题：如何让用户写通用代码，同时为每个具体场景生成最优实现。Burn 用 Backend Decorator 把后端选择推到编译期；CubeCL 用 `#[cube]` proc-macro + JIT 把 GPU 指令生成推到首次 launch；CubeK 用 minimal Blueprint 把 tile 策略选择推到首次 benchmark。这条共性没有官方名称——它是从源码中提取的观察。
+## 四个项目，各自的核心
 
 四个项目共享这条主线，是因为它们都构建在同一组基础设施上：Rust 的类型系统提供编译期计算能力，proc-macro 提供代码生成能力，CubeCL 的 JIT 编译管线提供运行时编译能力。三者叠加，整个生态可以在不牺牲性能的前提下保持组件间的正交性。
 
 ---
 
-## 一、三个项目，同一个模式：编译期 → JIT 时 → 首次执行
+### Burn
 
-Tracel 生态的决策分布在三个时间层次上。每个层次的推迟机制、成本和收益不同：
+Burn 的核心概念来自 `burn/README.md` line 72：
 
-| 层次 | 时机 | 机制 | 推迟成本 | 代表 |
-|------|------|------|----------|------|
-| **L1：编译期** | `cargo build` | Rust 泛型单态化 + proc-macro | 编译时间增长（单次） | Burn 类型栈、Burn-ONNX AOT |
-| **L2：JIT 编译时** | 首次 launch miss | expand → SSA → 后端 codegen | 首次 launch 延迟（一次性） | CubeCL JIT、comptime |
-| **L3：首次执行时** | 首次遇 shape key | benchmark 候选实现 → 缓存最优 | 首次执行延迟（一次性） | CubeK autotune |
+> Autodiff is actually a backend *decorator*. This means that it cannot exist by itself; it must encapsulate another backend.
 
-三层推迟的方向一致：**越靠近硬件，推迟得越远**。Burn 的决策在 L1（离硬件最远），CubeCL 在 L2，CubeK autotune 在 L3（直接与硬件对话）。这种分层意味着每一层都可以独立演进——CubeK 换一种 tile 策略不影响 Burn 的类型栈，Burn 换一种融合策略不影响 CubeCL 的 JIT 管线。
+Backend Decorator 是 Burn 的核心理念——Autodiff 不是独立的后端，是包裹在其他后端外面的装饰器。Fusion 同理。这意味着用户可以写 `Autodiff<Fusion<CubeBackend<WgpuRuntime>>>`——通过编译期泛型嵌套叠加正交能力，而不是运行时 switch 后端。
 
----
+为什么这是核心：因为 Burn 选择了 **trait 单态化而不是运行时 dispatch**。PyTorch 的后端切换是 `tensor.to(device)` 加查表；Burn 的后端切换是 `cargo build` 时 rustc 为每种类型组合生成独立机器码。代价是编译时间，收益是运行时零 dispatch 开销，以及推理时可以直接编译排除整个 Autodiff crate。
 
-## 二、Burn：正交能力的编译期组合
+[系统设计：Kernel Fusion](burn/kernel-fusion-system-design.md) | [系统设计：Autodiff](burn/autodiff-system-design.md)
 
-PyTorch 的后端选择是运行时的：`device = torch.device("cuda:0")` → Dispatch Key 查表 → 找到对应的 kernel 实现。这个方案的灵活性代价是运行时开销（虚表查找）和能力耦合（autograd 和 CUDA 后端在 C++ 层紧耦合）。
+### CubeCL
 
-Burn 把这个问题挪到编译期：
+CubeCL 的核心概念来自 `cubecl/README.md` line 34：
 
-```rust
-// 用户代码中不出现泛型——通过 DispatchDevice 枚举消解
-let device = Device::wgpu(0);
-let tensor = Tensor::<2>::from_data(data, &device);
+> [Kernels are] type-checked, borrow-checked, composable, and testable, and you do not have to context-switch into another language or build shader sources by string concatenation at runtime.
 
-// 但框架内部，类型栈在编译期完全展开：
-// Autodiff<Fusion<CubeBackend<WgpuRuntime>>>
-```
+CubeCL 的核心理念是 **kernel 不离开 Rust 的编译期安全边界**。不是用 C++ 写 CUDA 再链接，也不是用 Python 字符串拼接 WGSL——而是用 `#[cube]` 标注的纯 Rust 函数，依靠 proc-macro 在编译期展开为 IR，JIT 时再翻译为目标平台代码。
 
-[详细分析见 Burn 地图](burn/summary.md) | [系统设计：Kernel Fusion](burn/kernel-fusion-system-design.md) | [系统设计：Autodiff](burn/autodiff-system-design.md)
+为什么这是核心：因为保持了 Rust 的类型安全和工具链（rust-analyzer、cargo test、cargo expand），同时通过 JIT 编译支持多平台。代价是首次 launch 的冷启动编译延迟，通过 `CompilationCache` 磁盘缓存缓解。
 
-**推迟了什么**：后端选择、autodiff 的启用/禁用、融合的启用/禁用——从运行时字符串匹配推迟到编译期 trait 单态化。
+[系统设计：JIT 编译管线](../cubecl/jit-compilation-pipeline.md) | [系统设计：Autotune](../cubecl/autotune-system-design.md)
 
-**代价**：编译时间。每个后端组合生成一份独立的机器码。但这是单次成本——运行时没有虚表，dispatch 在编译期消解完毕。
+### CubeK
 
-**这个代价在什么场景下不可接受**：后端极多且频繁切换时。Tracel 针对这个问题提供了 `DispatchDevice` 枚举——用户侧不需要泛型传染，只有框架内部的 match 需要展开为具体类型。
+CubeK 的核心概念来自 `cubek/GUIDE.md` line 8：
 
----
+> The core philosophy of cubek is the strict separation of kernel structure (Compile Time) from execution parameters.
 
-## 三、CubeCL：GPU 指令生成的 JIT 推迟
+CubeK 用 **minimal Blueprint** 实现这一哲学。Blueprint 只放结构性信息（算法变体、分块方案形状、swizzle 模式），不放运行时数据（问题大小、硬件属性）。它必须实现 `Hash + Eq`，因为它的哈希值进入 CubeCL 的 JIT 编译 key。如果 Blueprint 包含了 M（问题大小的行数），每种不同的 M 都产生一份独立的 JIT 编译产物——kernel 爆炸。
 
-传统 GPU 编程：人写 `.cu` → nvcc → PTX。平台变了，重写 `.wgsl` 或 `.metal`。
+为什么这是核心：因为它是 CubeK 的"纪律"约束。与 CUTLASS 的模板参数爆炸不同，CubeK 用 Blueprint 的 `Hash` 边界来限制 JIT key 的维度。
 
-CubeCL 的方案：人写一份 `#[cube]` Rust 函数 → proc-macro 生成 expand 模块 → 首次 launch 时调用 expand 填入 IR → cubecl-opt 优化 → 各后端生成目标代码。
+[系统设计](cubek/blueprint-routine-autotune.md)
 
-[详细分析见 CubeCL 地图](cubecl/summary.md) | [系统设计：Autotune](../cubecl/autotune-system-design.md) | [系统设计：JIT 编译管线](../cubecl/jit-compilation-pipeline.md)
+### Burn-ONNX
 
-**推迟了什么**：GPU 指令的选择和优化——从"写代码时针对特定平台"推迟到"首次 launch 时由编译器决定"。
+Burn-ONNX 的核心来自 `burn-onnx/README.md`——它的设计定位是 build-time code generation 而不是 runtime model loader。ONNX Runtime 在运行时加载模型、解析 protobuf、按图执行。Burn ONNX 把这个过程挪到 `build.rs` 中：构建期把 ONNX 模型翻译为可调试的 Rust 源码，生成的代码穿过 Burn 的类型栈，享受与手写模型相同的融合和 autotune 优化。
 
-**comptime 的特殊角色**：`#[comptime]` 参数在 JIT 编译时固定，不在 GPU 运行时分支。这意味着：
-
-```rust
-#[cube(launch)]
-fn sum_plane<F: Float>(input: &[F], output: &mut [F], #[comptime] plane: bool) {
-    if plane {
-        output[UNIT_POS] = plane_sum(input[UNIT_POS]);  // 使用 subgroup 指令
-    } else {
-        sum_basic(input, output, /* ... */);              // 不使用 subgroup
-    }
-}
-```
-
-`plane: true` 和 `plane: false` 生成**两份不同的 JIT 产物**。不支持 subgroup 的硬件上，编译器不会遇到包含 subgroup 指令的 kernel——因为 `plane: false` 那份产物不包含这些指令，硬件的支持检查在 kernel 选择阶段已完成。
-
-**代价**：首次 launch 的冷启动延迟。JIT 编译 + 代码优化的时间在首次 launch 时支付。磁盘缓存缓解了后续 launch，但首次比热路径慢是 JIT 的固有特性。
+[详细分析](burn/onnx-summary.md)
 
 ---
 
-## 四、CubeK：最快的实现由 benchmark 决定
-
-CubeCL 的 comptime 决定了 kernel 的**结构**（哪些指令、什么控制流）。但同一结构下，可以有多种实现策略——NVIDIA tensor core (CMMA)、warp-level 向量化 (PlaneVec)、纯软件 tile (Register)。
-
-CubeK 的 autotune 在首次遇到新 `(M, N, K, dtype, layout)` 组合时，benchmark 所有候选实现，缓存最快者的索引。
-
-[详细分析见 CubeK 地图](cubek/summary.md)（待写）
-
-**推迟了什么**：同一算法结构下的最优实现选择——从"写代码时凭经验选"推迟到"首次执行时让硬件 benchmark 决定"。
-
-**与 comptime 的分界线**：
-
-| 维度 | Comptime / Blueprint | Autotune |
-|------|----------------------|----------|
-| 决策时机 | JIT 编译时（L2） | 首次执行时（L3） |
-| 决策内容 | kernel **结构**（循环展开、plane vs scalar） | kernel **实现变体**（CMMA vs PlaneVec） |
-| 失败形态 | JIT 编译失败（平台不支持的指令） | 跑了次优 kernel（仍能跑，只是慢） |
-| 爆炸风险 | blueprint 参数每多一个取值，JIT 产物翻倍 | 指数分桶（`#[autotune(anchor(...))]`）控制粒度 |
-
-**Blueprint 纪律是 CubeK 的核心设计约束**：只放改变控制流或指令选择的参数。vectorization、cube dim、硬件属性、问题尺寸一律排除——它们已由 JIT key 或 runtime 参数覆盖。违反这条纪律的代价是 kernel explosion——3×3×3 blueprint 参数空间 × 13 种 TileKind ≈ 351 个组合，每个组合独立 JIT 编译。
-
----
-
-## 五、Burn-ONNX：模型导入的构建期推迟
-
-ONNX Runtime 在运行时加载模型、解析 protobuf、按图执行。Burn ONNX 把这个过程挪到构建期：
-
-```
-model.onnx → build.rs → model.rs + model.bpk → 普通 Burn 代码
-```
-
-[详细分析见 Burn ONNX 地图](burn/onnx-summary.md)
-
-**推迟了什么**：模型导入——从"运行时解析 ONNX protobuf"推迟到"构建期生成 Rust 源码"。
-
-**这个推迟使能了什么**：模式匹配。运行时 loader 只能按图执行——`MatMul → Scale → Softmax → MatMul` 五个 kernel launch。AOT 编译器可以识别 SDPA 分解模式，替换为单一 `Attention` 节点——生成代码调用 Burn 原生注意力，穿过融合流和 CubeK/CubeCL 内核。
-
-**代价**：`build.rs` 的执行时间。模型越大、IR 流水线越复杂，构建越慢。但这是单次成本——运行时二进制不依赖 ONNX Runtime。
-
----
-
-## 六、一次 matmul 穿过四层：从用户代码到 GPU 执行
-
-这个观察在具体操作中是什么样子？以 `tensor.matmul(&other)` 为例，追踪特殊化如何在各层后移：
+## 一个 matmul 穿过四层
 
 ```
 用户代码: tensor.matmul(&other)
     │
-    ├─ [L1 编译期] Burn 类型栈
+    ├─ [编译期] Burn 类型栈
     │   rustc 单态化: Autodiff<Fusion<CubeBackend<CudaRuntime>>>
     │   → tensor 的类型在编译期固定，matmul dispatch 消解为函数指针
     │
-    ├─ [L1 编译期] Autodiff 层
+    ├─ [编译期] Autodiff 层
     │   Autodiff::float_matmul:
     │     1. 调用 inner.matmul() → 交给 Fusion 层
     │     2. 注册 MatmulBackward 到梯度图
@@ -165,7 +96,7 @@ model.onnx → build.rs → model.rs + model.bpk → 普通 Burn 代码
     │     3. 若缓存缺失: autotune benchmark 候选 Strategy
     │   → Strategy::Auto 先试 SimpleCyclicCmma，硬件不支持则退到 SimpleUnit
     │
-    ├─ [L2 JIT] CubeCL JIT 编译
+    ├─ [JIT 编译] CubeCL JIT 编译
     │   KernelLauncher::launch → CubeCL runtime:
     │     1. 计算 JIT key = (kernel, comptime, vectorization, cube_dim, ...)
     │     2. 缓存 miss → 调用 kernel.define() → expand 填入 Scope
@@ -173,7 +104,7 @@ model.onnx → build.rs → model.rs + model.bpk → 普通 Burn 代码
     │     4. CppCompiler<CudaDialect> → NVRTC → PTX → 写入 CompilationCache
     │   → matmul 的计算逻辑从 Rust #[cube] 变成 PTX 机器码
     │
-    └─ [L3 首次执行] Autotune（若 matmul 未缓存）
+    └─ [首次执行] Autotune（若 matmul 未缓存）
         1. 对每个候选 TileKind (CMMA, PlaneVec, Register) → 各 benchmark 一次
         2. 缓存最快候选索引，后续 launch 直接用
         → autotune 回答的是"在这个特定 GPU 上，对 (M,N,K) 这个大小，
@@ -196,55 +127,48 @@ model.onnx → build.rs → model.rs + model.bpk → 普通 Burn 代码
 
 ---
 
-## 七、推迟的边界：什么不能推迟
-
-四层推迟的共同前提是：**推迟后的决策条件必须在推迟到的时机仍然可用**。
+## 各层的前提与限制
 
 - **Burn**：编译期需要知道所有可能的后端组合。如果后端是运行时动态加载的（如插件系统），编译期单态化就不适用——`DispatchDevice` 枚举需要提前列出所有变体。
 - **CubeCL**：JIT 时需要 GPU 编译器可用（NVRTC、wgpu 等）。在没有编译器的环境（如某些嵌入式 GPU），JIT 不可行——需要 AOT 预编译。
 - **CubeK**：autotune 需要实际硬件执行 benchmark。在没有目标硬件的 CI 环境，autotune 只能跳过——退化为使用默认候选。
 - **Burn-ONNX**：AOT 编译需要 `build.rs` 能访问 ONNX 模型文件。模型路径在构建期确定——运行时换模型需要重新构建。
 
-### 推迟的隐性成本
+### 首次支付
 
-每层推迟机制都有"首次支付"特征——第一次遇到某组合时慢，后续快。这对生产部署的影响取决于调用模式：
+每个项目都有"首次遇到某组合时慢，后续快"的特征：
 
-| 推迟层 | 首次成本 | 触发条件 | 缓解手段 |
-|--------|----------|----------|----------|
-| L1 编译期 | 编译时间（分钟级） | 每次 `cargo build` | 增量编译缓存 |
-| L2 JIT | JIT 编译 + SSA 优化（秒级） | 首次 launch 每个 (kernel, comptime, vec, cubdim) 组合 | `CompilationCache` 磁盘缓存 |
-| L3 Autotune | benchmark N 个候选（秒~分钟级） | 首次执行每个 (M,N,K,dtype,layout) 组合 | 指数分桶减少 key 空间；持久化 autotune 结果 |
+| 层 | 首次成本 | 触发条件 | 缓解 |
+|----|----------|----------|------|
+| Burn 类型栈 | 编译时间（分钟级） | 每次 `cargo build` | 增量编译缓存 |
+| CubeCL JIT | JIT 编译 + 优化（秒级） | 首次 launch 每个 kernel+comptime 组合 | `CompilationCache` 磁盘缓存 |
+| CubeK Autotune | benchmark N 个候选（秒~分钟级） | 首次执行每个 shape+dtype 组合 | anchor 分桶减少 key 空间；持久化 autotune 结果 |
 
-对于推理服务（固定模型 + 固定 batch size），三层推迟的成本只在首次请求时支付。对于训练（每次 batch 大小可能不同），autotune 的分桶策略（`#[autotune(anchor(...))]`）将连续的 `M` 值映射到离散桶，减少了需要 benchmark 的 unique key 数量。
-
----
-
-## 八、为什么推迟能正交组合
-
-Tracel 生态的组件可以像积木一样组合（`Autodiff<Fusion<CubeBackend<CudaRuntime>>>`），是因为每层推迟的决策是**正交的**：
-
-- Burn 的类型栈在 L1 展开——它对 L2/L3 的 JIT 和 autotune 无感知
-- CubeCL 的 JIT 在 L2 编译——它不关心 kernel 是被 Fusion 合并来的还是直接 launch 的
-- CubeK 的 autotune 在 L3 benchmark——它不关心 kernel 是用 `#[cube]` 手写的还是 ONNX AOT 生成的
-
-每层只看到下层提供的 trait 接口，不穿透到下层内部。这种分层约束由 `Backend` trait 的拆分设计（1 + 8 个超 trait）和 CubeK 的 Blueprint-Routine-Autotuner 三层纪律共同保证。
+对于推理服务（固定模型 + 固定 batch size），这些成本只在首次请求时支付。对于训练（每次 batch 大小可能不同），CubeK 的 anchor 分桶将连续的 shape 值映射到离散桶，减少 benchmark 次数。
 
 ---
 
-## 九、与其他生态的对比
+## 组合的机制：trait 是硬边界
 
-| 决策 | PyTorch | TensorFlow/XLA | Tracel |
+组件可以像积木一样组合（`Autodiff<Fusion<CubeBackend<CudaRuntime>>>`），是因为每个项目通过 trait 定义清晰的边界：
+
+- Burn 的类型栈在编译期展开——它对 CubeCL 的 JIT 和 CubeK 的 autotune 无感知
+- CubeCL 的 JIT 在首次 launch 时编译——它不关心 kernel 是被 Fusion 合并来的还是直接 launch 的
+- CubeK 的 autotune 在首次执行时 benchmark——它不关心 kernel 是用 `#[cube]` 手写的还是 ONNX AOT 生成的
+
+每层只看到下层提供的 trait 接口。`Backend` trait 的拆分设计和 CubeK 的 Blueprint 纪律各自保证了隔离。
+
+## 与其他生态的对比
+
+| 维度 | PyTorch | TensorFlow/XLA | Tracel |
 |------|---------|---------------|--------|
-| 后端选择 | 运行时 Dispatch Key | 编译期（XLA 编译整个图） | 编译期（trait 单态化） |
-| 算子融合 | 运行时（Dynamo / inductor） | 编译期（XLA HLO fusion） | 运行时增量融合（L2 层：入队推迟） |
-| GPU 代码生成 | AOT（nvcc 预编译 CUDA kernel）+ Triton JIT（Python 层） | AOT（XLA → PTX/Metal） | JIT（L2：首次 launch） |
-| kernel 实现选择 | 手写 CUDA + Triton autotune | XLA 后端固定实现 | autotune（L3：首次执行 benchmark） |
-| 模型导入 | 运行时（ONNX Runtime / torch.onnx） | 运行时（TF Serving）+ AOT（XLA 图导出） | AOT（`build.rs` 生成 Rust 源码） |
+| 后端选择 | 运行时 Dispatch Key | 编译期（XLA 编译图） | 编译期 trait 单态化 |
+| 算子融合 | 运行时（Dynamo/inductor） | 编译期（XLA HLO fusion） | 运行时惰性入队 + 探索 |
+| GPU 代码生成 | AOT（nvcc）+ Triton JIT | AOT（XLA→PTX/Metal） | JIT（首次 launch） |
+| kernel 实现选择 | 手写 CUDA + Triton autotune | 后端固定实现 | autotune（首次 benchmark） |
+| 模型导入 | 运行时（ONNX Runtime） | 运行时+AOT | AOT（`build.rs` 生成 Rust） |
 
-Tracel 的独特之处在于：**三种推迟机制共享一个宿主语言（Rust）**——编译期单态化、proc-macro 代码生成、JIT 编译都在 Rust 生态内完成。这意味着：
-- Comptime 代码和 kernel 代码写在同一份源码里（不是 Python 生成 Triton kernel）
-- 类型栈的所有组合在 `cargo build` 时检查（不是运行时 crash）
-- AOT 生成的 Rust 代码穿过同一套类型栈和融合流（生成代码和手写代码等价）
+Tracel 的独特之处：编译期单态化、proc-macro 代码生成、JIT 编译共享一个宿主语言（Rust）。Comptime 代码和 kernel 代码在同一份源码里；类型栈的所有组合在 `cargo build` 时检查；AOT 生成的 Rust 代码穿过与手写代码相同的类型栈。
 
 ---
 
