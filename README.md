@@ -115,10 +115,12 @@
 
 | 仓库 | commit | 日期 |
 |------|--------|------|
-| burn | `cfa867f13` | 2026-06-05 |
-| cubecl | `ba103c7f` | 2026-06-04 |
-| burn-onnx | main | — |
-| cubek | main | — |
+| burn | `78f10aec1` | 2026-06-10 |
+| cubecl | `35b861d0` | 2026-06-12 |
+| burn-onnx | `846b2452` | 2026-06-11 |
+| cubek | `c6a0bf40` | 2026-06-12 |
+
+> [SOURCE-VERSION.md](docs/SOURCE-VERSION.md) 包含每篇文章的 API 依赖矩阵和漂移检查清单。
 
 设置参考仓库：
 

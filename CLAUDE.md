@@ -13,6 +13,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 docs/                          ← 分析文档（Markdown，不可执行）
   architecture.md              ← 跨项目架构主线："决策推迟"
+  concept-index.md             ← 概念反向索引：~70 个关键概念 → 文章位置
+  SOURCE-VERSION.md            ← 源码基准、API 漂移矩阵、更新检查清单
   <project>/                   ← burn/ | cubecl/ | cubek/
     <system>-system-design.md  ← （系统设计）从设计决策到源码实现的完整分析
     summary.md                 ← （导航）指向系统设计文章 + 章节教程的索引
@@ -21,10 +23,14 @@ docs/                          ← 分析文档（Markdown，不可执行）
   appendix/                    ← 附录（翻译、归档）
 
 src/                           ← 示例与作业（Cargo workspace，可执行）
-  Cargo.toml                   ← workspace 根，members 列出每个章节对应的 crate
-  <chapter-crate>/             ← 一个章节对应一个 crate
-    Cargo.toml                 ← 依赖路径指向 ../../burn 或 ../../cubecl
-    src/main.rs | src/lib.rs
+  Cargo.toml                   ← workspace 根，7 个 member crate
+  burn-test/                   ← Fusion 融合日志示例 + 测试
+  autodiff-test/               ← Autodiff 梯度验证示例 + 测试
+  ch1-gelu-variants/           ← CubeCL GELU kernel 变体作业
+  ch2-expand-study/            ← CubeCL 宏展开观察作业
+  ch3-trait-study/             ← （骨架）trait 机制作业
+  fusion-ch2-queue/            ← （骨架）队列机制作业
+  fusion-ch3-drain/            ← （骨架）drain 机制作业
 
 burn/          (gitignored)    ← tracel-ai/burn 参考源码
 cubecl/        (gitignored)    ← tracel-ai/cubecl 参考源码

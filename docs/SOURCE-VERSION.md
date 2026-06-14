@@ -4,10 +4,10 @@
 
 | 仓库 | commit | 日期 | 说明 |
 |------|--------|------|------|
-| burn | `cfa867f13` | 2026-06-05 | 六篇文章的源码校验基准 |
-| cubecl | `ba103c7f` | 2026-06-04 | JIT 管线、autotune 和 CubeK 的源码基准 |
-| burn-onnx | main | — | ONNX AOT 分析基准 |
-| cubek | main | — | CubeK 分析基准 |
+| burn | `78f10aec1` | 2026-06-10 | 六篇文章的源码校验基准 |
+| cubecl | `35b861d0` | 2026-06-12 | JIT 管线、autotune 和 CubeK 的源码基准 |
+| burn-onnx | `846b2452` | 2026-06-11 | ONNX AOT 分析基准 |
+| cubek | `c6a0bf40` | 2026-06-12 | CubeK 分析基准 |
 
 ## 更新参考仓库
 
@@ -98,3 +98,13 @@ cd cubek  && git pull && cd ..
    - **低风险**（基础设施/数学算法）：可信任，定期抽查
 3. **更新本文的基准 commit**
 4. **记录变更在 MEMORY.md 或本文件中**
+
+## 已知漂移
+
+### 2026-06-12: cubecl `35b861d0` — `Variable` → `Value` 重构
+
+CubeCL commit `35b861d0` (`refactor: Simplify Variable to align it with existing IRs`) 将 `Variable` 重命名为 `Value`，`VariableKind` 重命名为 `ValueKind`，后者从 15+ 变体简化为 2 个变体（`Value { id }` 和 `Constant`）。
+
+**影响文章**：`jit-compilation-pipeline.md` 中讨论 `Variable` 和 `VariableKind` 的段落需要更新命名，但概念性描述（SSA 版本控制、内建变量、常量）仍然准确。
+
+**状态**：待更新——低优先级（概念正确，命名偏旧）。
