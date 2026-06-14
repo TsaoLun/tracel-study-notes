@@ -8,15 +8,14 @@
 
 ## 快速开始
 
-文档按**主题 → 类型**组织。每个主题目录下：
+文档按两种形式组织：
 
 | 类型 | 文件 | 职能 |
 |------|------|------|
-| **summary** | `summary.md` | 心智模型 + 架构连接 + 设计动机。读完知道"为什么这么设计"。不逐机制展开。（每篇 15–25 分钟） |
-| **plan** | `index.md` | 专题写作计划 + 入门引导：示例是什么、建议阅读顺序、跟跑方式。 |
-| **chapter** | `N-title.md` | 跟练教程、逐机制展开源码、带作业。 |
+| **系统设计** | `*-system-design.md` | 从代码中提取设计决策与权衡：为什么这么设计、和主流方案的区别、限制。每篇对应一个核心系统。 |
+| **章节教程** | `N-title.md` | 跟练教程、逐机制展开源码、带作业练习。 |
 
-**建议先读 summary 建立全局视图，再读 chapter 跟练具体机制。**
+**推荐入口：[全景篇](docs/burn/burn-systems-architecture.md)** — 以一行 `z = (x*2.0+1.0).tanh(); z.backward()` 穿行 Fusion → Autotune → JIT → Autodiff 四个核心系统。
 
 ---
 
@@ -42,67 +41,87 @@
 
 ---
 
-## 文档
+## 系统设计文章
+
+五篇文章从设计决策出发，覆盖 Burn/CubeCL 技术栈的四个核心系统。每篇独立可读，合读形成完整的训练 step 全链路认知。
+
+| 项目 | 文章 | 内容 |
+|------|------|------|
+| 全栈 | [burn-systems-architecture.md](docs/burn/burn-systems-architecture.md) | **全景篇（推荐入口）**：一行代码穿行 Fusion → Autotune → JIT → Autodiff |
+| Burn | [kernel-fusion-system-design.md](docs/burn/kernel-fusion-system-design.md) | 惰性队列融合：OperationFuser 竞标、Stream/MultiStream 隔离、Page/Slice 内存 |
+| Burn | [autodiff-system-design.md](docs/burn/autodiff-system-design.md) | 装饰器 Autodiff：类型状态图构建、BFS 逆序执行、分布式梯度同步 |
+| CubeCL | [autotune-system-design.md](docs/cubecl/autotune-system-design.md) | 策略枚举 vs 参数网格、优先级提前终止、anchor 量化缓存 |
+| CubeCL | [jit-compilation-pipeline.md](docs/cubecl/jit-compilation-pipeline.md) | `#[cube]` → IR → 优化 → WGSL/SPIR-V/MSL → GPU dispatch |
+
+## 章节教程与导航
 
 ```
 docs/
-├── architecture.md                ← （地图）跨项目架构主线：决策推迟
+├── architecture.md                ← 跨项目架构主线："决策推迟"
 │
-├── burn/                          ← Burn 框架底层机制
-│   ├── summary.md                 （地图）类型栈 + 融合流 + 框架开销
-│   ├── onnx-summary.md            （地图）ONNX→Rust AOT 编译器
-│   ├── autodiff/
-│   │   └── summary.md             （地图）选择性包装 + 梯度图 + Checkpointing
-│   ├── fusion/                    ← Burn Fusion 运行时专题
-│   │   ├── index.md               （计划）8 章写作计划 + 入门引导
-│   │   └── 1-client-server.md     （章节）双客户端-服务器：from_data → GPU buffer
-│   └── onnx/                      ← Burn ONNX 专题
-│       └── index.md               （计划）6 章写作计划 + 入门引导
+├── burn/                          ← Burn 框架
+│   ├── burn-systems-architecture.md ← 全景篇
+│   ├── kernel-fusion-system-design.md ← Fusion 系统设计
+│   ├── autodiff-system-design.md   ← Autodiff 系统设计
+│   ├── summary.md                  ← 导航页
+│   ├── onnx-summary.md             ← ONNX AOT
+│   ├── fusion/                     ← Fusion 章节教程
+│   │   ├── index.md                ← 8 章计划
+│   │   └── 1-client-server.md      ← 章节：from_data → GPU buffer
+│   └── onnx/                       ← ONNX 计划
+│       └── index.md
 │
 ├── cubecl/                        ← CubeCL 编译器
-│   ├── summary.md                 （地图）#[cube] 宏展开、SSA、autotune
-│   ├── index.md                   （计划）8 章写作计划 + 入门引导
-│   ├── 1-gelu-launch.md           （章节）GELU 走通一条 launch
-│   └── 2-expand.md                （章节）expand：+ → __expand_add_method → IR
+│   ├── autotune-system-design.md   ← Autotune 系统设计
+│   ├── jit-compilation-pipeline.md ← JIT 编译管线
+│   ├── summary.md                  ← 导航页
+│   ├── index.md                    ← 8 章计划
+│   ├── 1-gelu-launch.md            ← 章节：GELU 走通 launch
+│   └── 2-expand.md                 ← 章节：expand 机制
 │
-└── cubek/                         ← CubeK 算子库
-    └── summary.md                 （地图）Blueprint-Routine-Autotuner 三层纪律
+├── cubek/                         ← CubeK
+│   └── summary.md                  ← Blueprint-Routine-Autotuner
+│
+└── appendix/                      ← 附录
+    └── automatic-kernel-fusion.md  ← 旧博客翻译
 ```
 
 ### 跨项目
 
 | 类型 | 文档 | 主题 |
 |------|------|------|
-| 地图 | [architecture.md](docs/architecture.md) | 决策推迟：编译期 → JIT 时 → 首次执行——四项目共性 |
+| 架构 | [architecture.md](docs/architecture.md) | 决策推迟：编译期 → JIT 时 → 首次执行——四项目共性 |
 
 ### Burn
 
-| 类型 | 文档 | 主题 | 决策时机 | 状态 |
-|------|------|------|----------|:---:|
-| 地图 | [summary.md](docs/burn/summary.md) | 类型栈 + 融合流 + 框架开销 | `rustc` 单态化 + 训练 loop | ✅ |
-| 地图 | [onnx-summary.md](docs/burn/onnx-summary.md) | ONNX→Rust AOT 编译器 | `cargo build` / `build.rs` | ✅ |
-| 地图 | [autodiff/summary.md](docs/burn/autodiff/summary.md) | 选择性包装 + 梯度图 + Checkpointing | 前向运行时 + `.backward()` | ✅ |
-| 计划 | [fusion/index.md](docs/burn/fusion/index.md) | Fusion 运行时 8 章写作计划 | — | ✅ |
-| 计划 | [onnx/index.md](docs/burn/onnx/index.md) | ONNX IR 流水线 6 章写作计划 | — | ✅ |
-| 章节 | [fusion/1-client-server.md](docs/burn/fusion/1-client-server.md) | 双客户端-服务器：from_data → GPU buffer | — | ✅ |
-| 章节 | fusion/2-operation-queue.md … fusion/8-cross-stream-channel.md | OperationQueue … channel 重构 | — | 📋 |
-| 章节 | onnx/1-protobuf-to-ir.md … onnx/6-testing-modelgen.md | Protobuf → IR … 测试体系 | — | 📋 |
+| 类型 | 文档 | 主题 | 状态 |
+|------|------|------|:---:|
+| 全景 | [burn-systems-architecture.md](docs/burn/burn-systems-architecture.md) | Fusion → Autotune → JIT → Autodiff 全链路 | ✅ |
+| 设计 | [kernel-fusion-system-design.md](docs/burn/kernel-fusion-system-design.md) | 惰性队列融合 | ✅ |
+| 设计 | [autodiff-system-design.md](docs/burn/autodiff-system-design.md) | 装饰器 Autodiff | ✅ |
+| 导航 | [summary.md](docs/burn/summary.md) | 项目索引 | ✅ |
+| 地图 | [onnx-summary.md](docs/burn/onnx-summary.md) | ONNX→Rust AOT | ✅ |
+| 计划 | [fusion/index.md](docs/burn/fusion/index.md) | Fusion 8 章计划 | ✅ |
+| 章节 | [fusion/1-client-server.md](docs/burn/fusion/1-client-server.md) | from_data → GPU buffer | ✅ |
+| 计划 | [onnx/index.md](docs/burn/onnx/index.md) | ONNX 6 章计划 | ✅ |
+| 附录 | [appendix/automatic-kernel-fusion.md](docs/appendix/automatic-kernel-fusion.md) | 旧博客翻译 | ✅ |
 
 ### CubeCL
 
-| 类型 | 文档 | 主题 | 决策时机 | 状态 |
-|------|------|------|----------|:---:|
-| 地图 | [summary.md](docs/cubecl/summary.md) | `#[cube]` 宏展开、SSA 定点循环、autotune | 首次 kernel launch | ✅ |
-| 计划 | [index.md](docs/cubecl/index.md) | 8 章写作计划 + 入门引导 | — | ✅ |
-| 章节 | [1-gelu-launch.md](docs/cubecl/1-gelu-launch.md) | GELU 走通一条 launch | — | ✅ |
-| 章节 | [2-expand.md](docs/cubecl/2-expand.md) | expand：`+` → `__expand_add_method` → IR | — | ✅ |
-| 章节 | 3-trait-impl.md … 8-cubek-burn.md | trait、comptime、拓扑、JIT、autotune、CubeK/Burn | — | 📋 |
+| 类型 | 文档 | 主题 | 状态 |
+|------|------|------|:---:|
+| 设计 | [autotune-system-design.md](docs/cubecl/autotune-system-design.md) | 策略枚举 + 优先级剪枝 | ✅ |
+| 设计 | [jit-compilation-pipeline.md](docs/cubecl/jit-compilation-pipeline.md) | IR 设计 + 多平台代码生成 | ✅ |
+| 导航 | [summary.md](docs/cubecl/summary.md) | 项目索引 | ✅ |
+| 计划 | [index.md](docs/cubecl/index.md) | 8 章计划 | ✅ |
+| 章节 | [1-gelu-launch.md](docs/cubecl/1-gelu-launch.md) | GELU walkthrough | ✅ |
+| 章节 | [2-expand.md](docs/cubecl/2-expand.md) | expand 机制 | ✅ |
 
 ### CubeK
 
-| 类型 | 文档 | 主题 | 决策时机 | 状态 |
-|------|------|------|----------|:---:|
-| 地图 | [cubek/summary.md](docs/cubek/summary.md) | Blueprint-Routine-Autotuner 三层纪律 + TileKind + kernel explosion 预防 | JIT 编译时（L2）+ 首次执行时（L3） | ✅ |
+| 类型 | 文档 | 主题 | 状态 |
+|------|------|------|:---:|
+| 地图 | [cubek/summary.md](docs/cubek/summary.md) | Blueprint-Routine-Autotuner | ✅ |
 
 ---
 
@@ -114,40 +133,44 @@ tracel-study-notes/
 ├── CLAUDE.md                        ← 技术写作规范
 ├── .gitignore
 │
-├── docs/                            ← 所有机制分析文档
+├── docs/                            ← 所有分析文档
 │   ├── architecture.md              ← 跨项目架构主线
 │   ├── burn/
-│   │   ├── summary.md
+│   │   ├── burn-systems-architecture.md  ← 全景篇
+│   │   ├── kernel-fusion-system-design.md ← Fusion 系统设计
+│   │   ├── autodiff-system-design.md ← Autodiff 系统设计
+│   │   ├── summary.md                ← 导航页
 │   │   ├── onnx-summary.md
-│   │   ├── autodiff/
-│   │   │   └── summary.md
 │   │   ├── fusion/
 │   │   │   ├── index.md
 │   │   │   └── 1-client-server.md
 │   │   └── onnx/
 │   │       └── index.md
 │   ├── cubecl/
-│   │   ├── summary.md
+│   │   ├── autotune-system-design.md ← Autotune 系统设计
+│   │   ├── jit-compilation-pipeline.md ← JIT 编译管线
+│   │   ├── summary.md                ← 导航页
 │   │   ├── index.md
 │   │   ├── 1-gelu-launch.md
 │   │   └── 2-expand.md
-│   └── cubek/
-│       └── summary.md
+│   ├── cubek/
+│   │   └── summary.md
+│   └── appendix/
+│       └── automatic-kernel-fusion.md ← 旧博客翻译
 │
 ├── src/                             ← 示例与作业（Cargo workspace）
 │   ├── Cargo.toml
-│   ├── README.md
-│   ├── burn-test/                   ← Fusion 专题跟练：融合示例
-│   ├── ch1-gelu-variants/           ← CubeCL 专题 1 作业
-│   ├── ch2-expand-study/            ← CubeCL 专题 2 作业
-│   ├── ch3-trait-study/             ← CubeCL 专题 3 作业（骨架）
-│   ├── fusion-ch2-queue/            ← Fusion 专题 2 作业（骨架）
-│   └── fusion-ch3-drain/            ← Fusion 专题 3 作业（骨架）
+│   ├── burn-test/
+│   ├── ch1-gelu-variants/
+│   ├── ch2-expand-study/
+│   ├── ch3-trait-study/
+│   ├── fusion-ch2-queue/
+│   └── fusion-ch3-drain/
 │
 ├── burn/          (gitignored)      ← tracel-ai/burn 参考源码
-├── burn-onnx/     (gitignored)      ← tracel-ai/burn-onnx 参考源码
 ├── cubecl/        (gitignored)      ← tracel-ai/cubecl 参考源码
-└── cubek/         (gitignored)      ← tracel-ai/cubek 参考源码
+├── cubek/         (gitignored)      ← tracel-ai/cubek 参考源码
+└── burn-onnx/     (gitignored)      ← tracel-ai/burn-onnx 参考源码
 ```
 
 文档中源码引用使用各仓库根下的路径 + 符号名（如 `crates/burn-autodiff/src/backend.rs` 中的 `BackendTypes for Autodiff`）；行号仅作近似。跟练前 clone 参考仓库：
@@ -163,11 +186,12 @@ git clone https://github.com/tracel-ai/cubek.git
 
 ## 源码版本
 
-| 仓库 | 机制基准 | 说明 |
-|------|----------|------|
-| **burn** | v0.21.0（融合 channel 重构） | channel 重构对应该版本 |
+| 仓库 | commit | 说明 |
+|------|--------|------|
+| **burn** | `cfa867f13` (2026-06-05) | 五篇系统设计文章的源码基准 |
+| **cubecl** | `ba103c7f` (2026-06-04) | JIT 管线和 autotune 的源码基准 |
 | **burn-onnx** | main | 测试统计以 `expectations.toml` 为准 |
-| **cubecl** / **cubek** | main | TileKind 等以 cubek 源码为准 |
+| **cubek** | main | matmul autotune 候选以源码为准 |
 
 复验 burn-onnx 测试统计（在已 clone 的 `burn-onnx/` 下）：
 

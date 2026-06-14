@@ -5,20 +5,33 @@ metadata:
   type: project
 ---
 
-The Tracel study notes project follows a three-layer document hierarchy: map (summary.md) → plan (index.md) → chapter (N-title.md). Each of the four Tracel projects (Burn, CubeCL, CubeK, Burn-ONNX) has a map document. Chapter series currently exist for Burn Fusion (8 chapters) and CubeCL (8 chapters), with completed chapters at 3/16.
+The Tracel study notes project has dual document tracks: system-design articles (独立成篇的分析) and chapter tutorials (编号跟练教程). Decks used for documentation are Markdown; exercises are Rust crates in `src/`.
 
-## Key structural decisions (2026-06-01):
+## Core structure (2026-06-09 restructure):
 
-1. **Cross-project architecture narrative** at `docs/architecture.md` ties together the decision-deferral theme (L1 compile-time → L2 JIT-time → L3 first-execution) across all four projects.
+1. **Five system-design articles** form the primary content, covering Burn/CubeCL's four core systems:
+   - `docs/burn/burn-systems-architecture.md` — full-stack panorama (recommended entry point)
+   - `docs/burn/kernel-fusion-system-design.md` — lazy queue fusion engine
+   - `docs/cubecl/autotune-system-design.md` — strategy enumeration autotuner
+   - `docs/cubecl/jit-compilation-pipeline.md` — #[cube] → IR → GPU binary pipeline
+   - `docs/burn/autodiff-system-design.md` — decorator pattern autodiff
 
-2. **CubeK and Autodiff got map documents** (`docs/cubek/summary.md`, `docs/burn/autodiff/summary.md`) to fill the two biggest coverage gaps. CubeK focuses on Blueprint-Routine-Autotuner three-layer discipline; Autodiff on selective float-tensor wrapping and gradient graph.
+2. **Chapter tutorials** remain as numbered docs (`N-title.md`) with corresponding `src/` crates. Completed: CubeCL ch1 (gelu), CubeCL ch2 (expand), Fusion ch1 (client-server).
 
-3. **ONNX got a chapter plan** (`docs/burn/onnx/index.md`) with 6 chapters covering the IR pipeline from protobuf parsing to codegen and testing.
+3. **Navigation pages** (`summary.md` in burn/ and cubecl/) redirect to both system-design articles and chapter tutorials.
 
-4. **Decision-timing framing** was added to the end of every completed chapter (fusion ch1, CubeCL ch1, CubeCL ch2) as a structural pattern to maintain.
+4. **Appendix** (`docs/appendix/`) holds archived/translated content.
 
-5. **Exercise skeletons** for the next 3 chapters (CubeCL ch3, Fusion ch2, Fusion ch3) were created in `src/`. Future chapters should follow the same pattern: a Cargo crate with a stub lib.rs.
+## Key structural decisions:
 
-**Why:** The project had high planning-to-content ratio (16 chapters planned, 3 written), uneven coverage (no CubeK or Autodiff documents), and lacked a cross-cutting narrative connecting the four projects.
+5. **Old blog translation** (`automatic-kernel-fusion.md`) moved to appendix — superseded by system-design articles.
 
-**How to apply:** When adding new content, follow the existing patterns: chapters end with decision-timing table + common-misconceptions table + homework + next-chapter preview. New projects get a map document first, then a chapter plan, then chapters.
+6. **Cross-project architecture** (`docs/architecture.md`) updated with links to all five system-design articles.
+
+7. **Writing conventions** (CLAUDE.md 8 prohibited patterns) unchanged — they apply to all document types.
+
+8. **src/** structure unchanged — existing exercise crates continue to complement chapter tutorials.
+
+**Why:** The project evolved from chapter-style source walkthroughs to system-design analysis. System-design articles provide the "why" and comparative context that backend/Infra engineers need; chapter tutorials remain valuable for hands-on mechanism tracing.
+
+**How to apply:** New system-design articles go into the appropriate `docs/<project>/` directory with `-system-design.md` suffix. New chapter tutorials follow the existing `N-title.md` + `src/<crate>/` pattern.

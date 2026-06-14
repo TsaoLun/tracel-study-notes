@@ -3,8 +3,8 @@
 ## 读前须知
 
 - **本文覆盖**：Burn、CubeCL、CubeK、Burn-ONNX 四个项目共享的设计哲学——将决策从"写代码时"推迟到"编译时 / JIT 时 / 首次执行时"。本文是跨项目的地图，解释四个项目如何通过同一原则解决不同层次的问题。
-- **建议读完**：各项目的地图文档（[Burn](burn/summary.md)、[CubeCL](cubecl/summary.md)）后再读本文，看到共同模式。
-- **读者定位**：本文关注设计层面的共性——读完应能解释"为什么 Tracel 生态的组件可以自由组合而不互相冲突"。各项目的具体机制分析见对应地图文档。
+- **建议读完**：各项目的地图文档（[Burn](burn/summary.md)、[CubeCL](cubecl/summary.md)）以及五篇系统设计文章（[全景篇](burn/burn-systems-architecture.md)为推荐入口）后再读本文。本文关注设计层面的共性——读完应能解释"为什么 Tracel 生态的组件可以自由组合而不互相冲突"。
+- **读者定位**：本文关注设计层面的共性——读完应能解释"为什么 Tracel 生态的组件可以自由组合而不互相冲突"。各项目的具体机制分析见对应的系统设计文章和章节教程。
 
 ---
 
@@ -45,7 +45,7 @@ let tensor = Tensor::<2>::from_data(data, &device);
 // Autodiff<Fusion<CubeBackend<WgpuRuntime>>>
 ```
 
-[详细分析见 Burn 地图](burn/summary.md)
+[详细分析见 Burn 地图](burn/summary.md) | [系统设计：Kernel Fusion](burn/kernel-fusion-system-design.md) | [系统设计：Autodiff](burn/autodiff-system-design.md)
 
 **推迟了什么**：后端选择、autodiff 的启用/禁用、融合的启用/禁用——从运行时字符串匹配推迟到编译期 trait 单态化。
 
@@ -61,7 +61,7 @@ let tensor = Tensor::<2>::from_data(data, &device);
 
 CubeCL 的方案：人写一份 `#[cube]` Rust 函数 → proc-macro 生成 expand 模块 → 首次 launch 时调用 expand 填入 IR → cubecl-opt 优化 → 各后端生成目标代码。
 
-[详细分析见 CubeCL 地图](cubecl/summary.md)
+[详细分析见 CubeCL 地图](cubecl/summary.md) | [系统设计：Autotune](../cubecl/autotune-system-design.md) | [系统设计：JIT 编译管线](../cubecl/jit-compilation-pipeline.md)
 
 **推迟了什么**：GPU 指令的选择和优化——从"写代码时针对特定平台"推迟到"首次 launch 时由编译器决定"。
 
@@ -248,11 +248,18 @@ Tracel 的独特之处在于：**三种推迟机制共享一个宿主语言（Ru
 
 ## 相关文档
 
+### 系统设计文章
+| 项目 | 文章 |
+|------|------|
+| 全栈 | [全景篇](burn/burn-systems-architecture.md) |
+| Burn | [Fusion](burn/kernel-fusion-system-design.md)、[Autodiff](burn/autodiff-system-design.md) |
+| CubeCL | [Autotune](cubecl/autotune-system-design.md)、[JIT 编译管线](cubecl/jit-compilation-pipeline.md) |
+
+### 导航与教程
 | 项目 | 地图 | 专题计划 |
 |------|------|----------|
 | Burn | [summary.md](burn/summary.md) | [fusion/index.md](burn/fusion/index.md) |
 | Burn ONNX | [onnx-summary.md](burn/onnx-summary.md) | [onnx/index.md](burn/onnx/index.md)（待写） |
-| Burn Autodiff | [autodiff/summary.md](burn/autodiff/summary.md)（待写） | — |
 | CubeCL | [summary.md](cubecl/summary.md) | [index.md](cubecl/index.md) |
 | CubeK | [cubek/summary.md](cubek/summary.md)（待写） | — |
 
