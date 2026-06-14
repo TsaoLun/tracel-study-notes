@@ -9,7 +9,7 @@
 需要了解——每个概念后面附了快速学习资源。不深入，能理解"为什么存在这个机制"就够。
 
 **Rust trait 与泛型**：Burn 的类型栈 `Autodiff<Fusion<CubeBackend<WgpuRuntime>>>` 通过 trait 嵌套实现编译期后端组合。需要理解：trait 是什么（接口）、泛型参数如何单态化（编译期为每种具体类型生成独立代码）、`PhantomData` 的作用（标记类型关系但不持有值）。
-- [Rust Book §10](https://doc.rust-lang.org/book/ch10-00-generics.html)（泛型+trait）和 [§19.9](https://doc.rust-lang.org/book/ch19-09-advanced-traits.html)（PhantomData）
+- [Rust Book §10](https://doc.rust-lang.org/book/ch10-00-generics.html)（泛型+trait）和 [Nomicon: PhantomData](https://doc.rust-lang.org/nomicon/phantom-data.html)
 
 **GPU 执行模型**：Kernel 在 GPU 上以 workgroup（也叫 thread block/CUDA block）为单位并行执行。workgroup 内共享一块快速的 shared memory（对应用户管理的 L1 cache），workgroup 间无法直接通信。寄存器是每个线程最快速的私有存储，全局内存（GPU DRAM）所有 workgroup 共享但访问延迟最高。Fusion 之所以有效，是因为中间结果不再写回全局内存再读出来；Autotune 之所以必要，是因为 tile 大小需要匹配这几层存储的大小和带宽。
 - [CUDA Refresher: GPU Computing Ecosystem](https://developer.nvidia.com/blog/tag/cuda-refresher/) 的 Memory Hierarchy 和 Execution Model 章节
@@ -46,20 +46,18 @@ cd src && cargo check -p burn-test -p ch1-gelu-variants
 
 ## 阅读路径
 
-### 1. 建立坐标系 ⏱ ~15 分钟
+### 1. 建立坐标系
 
 **[architecture.md](docs/architecture.md)** — 四项目共享的设计哲学：决策推迟（L1 编译期 → L2 JIT 时 → L3 首次执行）。读完你知道 Tracel 生态的组件为什么可以自由组合。
 
 > ✓ 完成标准：能用自己的话解释"为什么 Burn 的 Autodiff 和 Fusion 可以独立演进而不会冲突"。
 
-### 2. 全景概览 ⏱ ~20 分钟
-
+### 2. 全景概览
 **[全景篇](docs/burn/burn-systems-architecture.md)** — 以 `z = (x*2.0+1.0).tanh(); z.backward()` 穿行四个系统。如果初次接触，先浏览 §1–§2（架构图和 Tensor 定义），然后在读完后面各系统文章后回来重读全链路时序图。
 
 > ✓ 完成标准：能在脑子里画出一张图——"一行代码触发后，经过哪几层、每层做了什么"。
 
-### 3. Fusion：为什么需要、怎么排队、如何竞标 ⏱ ~45 分钟
-
+### 3. Fusion：为什么需要、怎么排队、如何竞标
 **[Fusion](docs/burn/kernel-fusion-system-design.md)** — kernel launch 开销→融合收益，OperationQueue 的 dual IR，惰性执行与触发点。读到 §惰性执行末尾：
 
 > ▶ **动手**：`cd src/burn-test && RUST_LOG=burn_fusion=trace cargo run --release`
@@ -71,8 +69,7 @@ cd src && cargo check -p burn-test -p ch1-gelu-variants
 
 > 📖 **延伸阅读**：[fusion/1-client-server.md](docs/burn/fusion/1-client-server.md) — from_data 到 GPU buffer 的 client-server 链路源码 walkthrough。
 
-### 4. JIT 编译管线：宏到 GPU 二进制 ⏱ ~60 分钟
-
+### 4. JIT 编译管线：宏到 GPU 二进制
 **[JIT](docs/cubecl/jit-compilation-pipeline.md)** — `#[cube]` 宏展开、IR Scope 树、优化 pass。读到 §IR 优化末尾：
 
 > ▶ **动手**：`cd src/ch1-gelu-variants && cargo test -- --nocapture`
@@ -87,22 +84,19 @@ cd src && cargo check -p burn-test -p ch1-gelu-variants
 
 > 📖 **延伸阅读**：[cubecl/1-gelu-launch.md](docs/cubecl/1-gelu-launch.md) — GELU 从 `#[cube]` 到 GPU launch 的完整 walkthrough。
 
-### 5. Autotune：选最快的实现 ⏱ ~35 分钟
-
+### 5. Autotune：选最快的实现
 你理解了 kernel 如何编译和启动。Autotune 回答的问题是：**在多个候选 kernel 变体中，选哪个来编译和启动。** 同一个 matmul，1024×4096 和 4096×1024 的最优 tile 大小不同——怎么在首次执行时选出最快者，并缓存结果。
 
 **[Autotune](docs/cubecl/autotune-system-design.md)** — 策略枚举 vs Triton 参数网格、优先级提前终止、anchor 量化缓存。
 
 > ✓ 完成标准：能对比 CubeCL 和 Triton 的 autotune 在"搜索空间定义"和"缓存 key 设计"上的根本差异。
 
-### 6. CubeK：防止 Kernel 爆炸 ⏱ ~25 分钟
-
+### 6. CubeK：防止 Kernel 爆炸
 **[CubeK](docs/cubek/blueprint-routine-autotune.md)** — Blueprint-Routine-Autotuner 三层纪律。JIT 管线的 `KernelId` 哈希决定了编译缓存 key 的维度——CubeK 用 Blueprint 纪律限制哪些参数可以进入这个 key，用 Routine 的离散化防止组合爆炸。
 
 > ✓ 完成标准：能解释"如果把 M 放进 Blueprint，JIT 缓存会怎样爆炸"以及 CUTLASS 的等价问题是什么。
 
-### 7. Autodiff：梯度怎么算 ⏱ ~50 分钟
-
+### 7. Autodiff：梯度怎么算
 **[Autodiff](docs/burn/autodiff-system-design.md)** — 回顾 Fusion 篇：`Autodiff<Fusion<B>>` 中 Autodiff 在最外层。读到 §图构建结束后：
 
 > ▶ **动手**：`cd src/autodiff-test && cargo test -- --nocapture`
