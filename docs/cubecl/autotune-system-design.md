@@ -272,6 +272,4 @@ pub struct TuneInput<'a, R, O> {
 
 ---
 
-← [Fusion 系统设计](../burn/kernel-fusion-system-design.md) | → 下一篇：[JIT 编译管线](jit-compilation-pipeline.md)
-
-相关：[CubeK Blueprint-Routine-Autotuner](../cubek/blueprint-routine-autotune.md) — 如何用三层纪律防止 autotune 的 kernel 爆炸
+← [JIT 编译管线](jit-compilation-pipeline.md) | → 下一篇：[CubeK 架构纪律](../cubek/blueprint-routine-autotune.md)

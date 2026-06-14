@@ -54,7 +54,7 @@ burn-onnx/     (gitignored)    ← tracel-ai/burn-onnx 参考源码
 | 章节教程 | `N-title.md` | 末尾 `← 系统设计文章 \| 下一章 →` |
 | 附录 | `appendix/*.md` | 末尾注明来源和更新日期 |
 
-五篇核心文章形成闭环：`architecture → 全景 → Fusion → Autotune → JIT → CubeK → Autodiff → 全景`。添加新文章时更新上下游导航。图谱见 [README.md](README.md)。
+阅读路径：`architecture → 全景 → Fusion → JIT → Autotune → CubeK → Autodiff`。Inline exercise callouts（`▶ 动手` / `▶ 跟练`）在文章中穿插，读者在概念点上停下来验证。添加新文章或练习时：1) 按路径顺序插入 2) 更新上下游导航 3) 在合适的文章中加 inline callout。路径见 [README.md](README.md)。
 
 ## 命令
 

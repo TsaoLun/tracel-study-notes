@@ -82,6 +82,9 @@ Burn 没有全局计算图的概念。每个 tensor 操作被记录为 `Operatio
 
 关键点：**显示 tensor 值才触发执行，构建计算图不触发执行**。这和使用 tracing（`torch.jit.trace`）或 JIT 编译（`torch.compile`）有本质不同——不需要提前声明"这一段需要优化"，也不需要 warmup 迭代。
 
+> ▶ **动手**：`cd src/burn-test && RUST_LOG=burn_fusion=trace cargo run --release`
+> 设置 `RUST_LOG=burn_fusion=trace` 后运行，观察 `[stream]`（操作入队）、`[plan]`（Policy 决策）、`[explorer]`（探索融合机会）日志行。对照本节描述的 drain → process → explore 流程。
+
 ### 决策 3：探索 + 缓存的二级命中模型
 
 当 stream 被 drain 时，`Processor` 对队列中的操作序列做两件事：
@@ -106,6 +109,8 @@ Burn 没有全局计算图的概念。每个 tensor 操作被记录为 `Operatio
 这个竞争机制优雅地解决了"没有全局计算图"的问题——不需要提前决定"这个序列应该用哪种优化器"。所有优化器同时尝试消化操作序列，最强的那个胜出。专用的优化器（如 MatmulFuser）通过加分策略获得优先级。
 
 **但这引入了一个微妙的问题**：如果操作序列的前半段是 element-wise（可以被 ElementWiseFuser 消化），后半段是 matmul（可以被 MatmulFuser 消化），Block 的 merging pass 可能无法正确处理这种边界。这是一个实实在在的限制。
+
+> ▶ **跟练**：[fusion/1-client-server.md](fusion/1-client-server.md) — 理解 `Tensor::from_data` 如何穿过 Fusion client-server 到达 GPU buffer 的完整链路。与本文描述的 fusion 排队和执行互补。
 
 ---
 
@@ -251,6 +256,4 @@ Burn 的路线适合**动态计算图 + 高重复性的计算模式**（比如 L
 
 ---
 
-← [全景篇](burn-systems-architecture.md) | → 下一篇：[Autotune 系统设计](../cubecl/autotune-system-design.md)
-
-动手：[src/burn-test/](../../src/burn-test/) — `RUST_LOG=burn_fusion=trace` 观察融合日志
+← [全景篇](burn-systems-architecture.md) | → 下一篇：[JIT 编译管线](../cubecl/jit-compilation-pipeline.md)

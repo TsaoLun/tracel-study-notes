@@ -56,6 +56,9 @@ impl<B: Backend> Backward<B, 2> for Add {
 
 `binary()` 和 `unary()` 辅助函数（`ops/backward.rs:49`）处理"消费当前节点的梯度 → 按需要复制到各父节点 → 注册到 Gradients 容器"的标准流程。
 
+> ▶ **动手**：`cd src/autodiff-test && cargo test -- --nocapture`
+> 验证 `z = tanh(x*2.0+1.0)` 的梯度计算。观察 `z.backward()` 返回的 `Gradients` 容器，以及 `x.grad(&grads)` 提取出的梯度值。运行带 `RUST_LOG=burn_fusion=trace` 可同时观察 autodiff 触发的前向 fusion 执行。
+
 ### 核心数据结构
 
 图被表示为一个扁平的 `HashMap<NodeId, StepBoxed>`，存在 `AutodiffServer` 中（`burn/crates/burn-autodiff/src/runtime/server.rs:31`）：
