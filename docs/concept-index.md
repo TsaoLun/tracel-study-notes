@@ -81,7 +81,7 @@
 
 | 概念 | 文章 | 小节 |
 |------|------|------|
-| 特殊化后移（L1/L2/L3） | [architecture](architecture.md) | §一 |
+| 跨项目共性（Backend Decorator / JIT / minimal Blueprint） | [architecture](architecture.md) | §一 |
 | Tracel vs PyTorch/XLA | [architecture](architecture.md) | §九 |
 
 ---

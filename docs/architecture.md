@@ -1,10 +1,10 @@
-# Tracel 的架构共性：特殊化后移
+# 后端装饰器、JIT 编译、极简 Blueprint：Tracel 的跨项目共性
 
 > Burn 用 Backend Decorator 把后端选择推到编译期，CubeCL 用 JIT 把 GPU 指令生成推到首次 launch，CubeK 用 minimal Blueprint 把最优实现推到首次 benchmark。同一条共性——特殊化后移——在三个层次上以三种技术实现。
 
 ## 读前须知
 
-- **本文性质**：跨项目分析。三个项目用三种不同的技术解决同一类问题：如何让用户写通用的代码，同时在底层为每个具体场景生成最优实现。Burn 用 **Backend Decorator**（Burn README 的术语），CubeCL 用 JIT 编译，CubeK 用 **minimal Blueprint**（CubeK GUIDE.md 的术语）。本文把这条共线称为"特殊化后移"——它不是项目作者命名的概念，是从源码中提取的观察。
+- **本文性质**：跨项目分析。Burn 自称 **Backend Decorator**，CubeK 自称 **strict separation of compile-time structure from execution parameters**，CubeCL 强调 **composable from Rust to GPU IR**。三个项目没有给这条共性统一命名，但它贯穿了全部四个仓库的设计。
 - **本文定位**：阅读路径的第一步。在深入具体系统之前建立跨项目坐标系——理解这四个项目为什么可以自由组合而不互相冲突。不需要先读其他文章。
 - **读完后**：按 [阅读路径](../README.md) 继续全景篇和各系统文章。
 
@@ -12,13 +12,13 @@
 
 ## 核心主张
 
-> Burn、CubeCL、CubeK 用三种技术解决同一类问题：如何让用户写通用代码，同时为每个具体场景生成最优实现。Burn 用 Backend Decorator 把后端选择推到编译期；CubeCL 用 `#[cube]` proc-macro + JIT 把 GPU 指令生成推到首次 launch；CubeK 用 minimal Blueprint 把 tile 策略选择推到首次 benchmark。本文把这条共线称为"特殊化后移"——它是一个观察，不是项目源码中出现的官方概念。
+> Burn、CubeCL、CubeK 用三种技术解决同一类问题：如何让用户写通用代码，同时为每个具体场景生成最优实现。Burn 用 Backend Decorator 把后端选择推到编译期；CubeCL 用 `#[cube]` proc-macro + JIT 把 GPU 指令生成推到首次 launch；CubeK 用 minimal Blueprint 把 tile 策略选择推到首次 benchmark。这条共性没有官方名称——它是从源码中提取的观察。
 
 四个项目共享这条主线，是因为它们都构建在同一组基础设施上：Rust 的类型系统提供编译期计算能力，proc-macro 提供代码生成能力，CubeCL 的 JIT 编译管线提供运行时编译能力。三者叠加，整个生态可以在不牺牲性能的前提下保持组件间的正交性。
 
 ---
 
-## 一、特殊化后移发生在三个层次
+## 一、三个项目，同一个模式：编译期 → JIT 时 → 首次执行
 
 Tracel 生态的决策分布在三个时间层次上。每个层次的推迟机制、成本和收益不同：
 
@@ -127,7 +127,7 @@ model.onnx → build.rs → model.rs + model.bpk → 普通 Burn 代码
 
 ---
 
-## 六、一次 matmul 穿过四层：特殊化后移的完整旅程
+## 六、一次 matmul 穿过四层：从用户代码到 GPU 执行
 
 这个观察在具体操作中是什么样子？以 `tensor.matmul(&other)` 为例，追踪特殊化如何在各层后移：
 

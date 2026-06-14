@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 docs/                          ← 分析文档（Markdown，不可执行）
-  architecture.md              ← 跨项目架构主线：特殊化后移（Backend Decorator / JIT / minimal Blueprint）
+  architecture.md              ← 跨项目架构共性（Backend Decorator / JIT / minimal Blueprint）
   concept-index.md             ← 概念反向索引：~70 个关键概念 → 文章位置
   SOURCE-VERSION.md            ← 源码基准、API 漂移矩阵、更新检查清单
   <project>/                   ← burn/ | cubecl/ | cubek/
