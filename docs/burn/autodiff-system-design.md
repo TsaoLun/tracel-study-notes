@@ -4,7 +4,9 @@
 
 ## Autodiff 在框架中的位置
 
-所有 ML 框架都需要计算梯度。PyTorch 的方案是将 autograd 引擎深度耦合到 tensor 类型和 C++ 运行时中。Burn 走了一条不同的路：**Autodiff 是一个装饰器（decorator），包裹在任意后端外面**。
+回顾 [Fusion 篇](kernel-fusion-system-design.md)：Burn 的后端是可组合的——`Autodiff<Fusion<CubeBackend<WgpuRuntime>>>` 中 Autodiff 在最外层。前向操作先经 autodiff 记录梯度图，再入 fusion 引擎排队执行。反向传播则完全绕开 fusion，直接调用内层后端。
+
+PyTorch 的方案是将 autograd 引擎深度耦合到 tensor 类型和 C++ 运行时中。Burn 走了一条不同的路：**Autodiff 是一个装饰器（decorator），包裹在任意后端外面**。
 
 ```rust
 // burn/crates/burn-autodiff/src/backend.rs:22

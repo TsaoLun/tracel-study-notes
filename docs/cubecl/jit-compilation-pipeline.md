@@ -135,8 +135,8 @@ pub enum Operation {
 
 5. 以上四步在 `optimize_scope()` 的 `loop` 中反复运行直到收敛——常量折叠可能打开内联机会，内联又可能打开新的常量折叠。
 
-> ▶ **动手**：`cd src/ch2-expand-study && cargo test -- --nocapture`
-> 观察 Rust `+` 如何变成 `__expand_add_method(scope, rhs)`。与本节描述的表达式→IR→优化→代码生成对照。
+> ▶ **动手**：`cd src/ch1-gelu-variants && cargo test -- --nocapture`
+> 写 GELU kernel 的三种变体（标量、vec2、vec4）。每种变体对应不同的 `CubeDim` 和向量化参数，在 GPU 上跑通后再回来看 IR 如何生成——先建立"我能写一个 kernel"的直觉。
 
 还有后端特定的 pass。WGSL 编译器（`cubecl/crates/cubecl-wgpu/src/compiler/wgsl/compiler.rs:123`）在生成代码前运行：
 
@@ -236,8 +236,8 @@ GPU 实际执行在 `WgpuStream::register_pipeline`（`cubecl/crates/cubecl-wgpu
 
 对于 SPIR-V 有特化：通过 `pass.set_immediates()` 传入内联常量（SPIR-V specialization constants）。对于 MSL：过渡自定义 Metal 资源。
 
-> ▶ **动手**：`cd src/ch1-gelu-variants && cargo test -- --nocapture`
-> 写 GELU kernel 的三种变体（标量、vec2、vec4）。与本文的宏展开→IR→优化→代码生成流程对照：每种变体对应不同的 IR 展开，体会 comptime 参数如何影响 KernelId 和编译缓存。
+> ▶ **动手**：`cd src/ch2-expand-study && cargo test -- --nocapture`
+> 现在你已经写过一个 kernel。回来看内部：Rust `+` 如何变成 `__expand_add_method(scope, rhs)`，与本文的表达式→IR→优化→代码生成流程对照。
 
 ---
 
@@ -323,6 +323,8 @@ Cache path: {root}/spirv_{vendor}_{device}/{version}/{key_hash}
 - KernelId：`cubecl/crates/cubecl-runtime/src/id.rs`
 
 ---
+
+你已经理解了 kernel 如何编译和启动。下一步回答的问题是：**同一个 matmul 在 1024×4096 和 4096×1024 的最优 tile 大小不同——如何在首次执行时选出最快者，并缓存结果。** 这是 Autotune 系统设计的起点。
 
 ← [Fusion 系统设计](../burn/kernel-fusion-system-design.md) | → 下一篇：[Autotune 系统设计](autotune-system-design.md)
 

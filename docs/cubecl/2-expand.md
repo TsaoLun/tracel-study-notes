@@ -478,6 +478,4 @@ Expression::FunctionCall { func, args, associated_type: None, .. } => {
 
 ---
 
-*Burn 底层机制 · CubeCL 专题 · 第二章 · [系列索引](../../README.md)*
-
-← 第一章：[1-gelu-launch](1-gelu-launch.md) | ← [JIT 编译管线](jit-compilation-pipeline.md)（系统设计）
+*CubeCL 专题 · 源码 walkthrough · [阅读路径](../../README.md)（可选的延伸阅读）*

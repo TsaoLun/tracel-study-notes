@@ -490,6 +490,4 @@ where
 | **专题 1** | **本文** |
 | 专题 2–8 | 见 [计划表](index.md#章节目录) |
 
-*Burn 底层机制 · Fusion 专题 · 第一章 · [系列索引](../../../README.md)*
-
-← [Fusion 系统设计](../kernel-fusion-system-design.md) | → 第二章计划见 [index.md](index.md)
+*Fusion 专题 · 源码 walkthrough · [阅读路径](../../../README.md)（可选的延伸阅读）*

@@ -401,6 +401,4 @@ builder.build(self.settings.clone())  // → KernelDefinition（仍是 IR 级描
 | **专题 1** | **本文** |
 | 专题 2–8 | 见计划表 |
 
-*Burn 底层机制 · CubeCL 专题 · 第一章 · [系列索引](../../README.md)*
-
-← [JIT 编译管线](jit-compilation-pipeline.md)（系统设计） | → 第二章：[2-expand](2-expand.md)
+*CubeCL 专题 · 源码 walkthrough · [阅读路径](../../README.md)（可选的延伸阅读）*
