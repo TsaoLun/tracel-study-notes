@@ -1,7 +1,6 @@
-# CubeCL 专题写作计划
+> **归档**：这是旧架构（summary → index → chapter）的残留文件，保留作为历史参考。当前阅读路径见 [README](../../README.md)，系统设计分析见 [JIT 编译管线](jit-compilation-pipeline.md) 和 [Autotune 系统设计](autotune-system-design.md)。
 
-> 本专题在 [CubeCL GPU 地图](summary.md)（概述：expand、SSA、autotune、CubeK）之后，按**可跟练、可对照源码**的顺序拆章。  
-> **读计划前**：若你从未跑过 CubeCL，可先读 [summary 读前须知](summary.md#读前须知) 或下方「入门引导」，再打开 [第一章](1-gelu-launch.md)。
+# CubeCL 专题写作计划（已归档）
 
 ---
 

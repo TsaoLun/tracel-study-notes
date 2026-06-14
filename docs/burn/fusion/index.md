@@ -1,6 +1,6 @@
-# Burn Fusion 专题写作计划
+> **归档**：旧架构的章节计划。当前阅读路径见 [README](../../../README.md)，系统设计分析见 [Fusion 系统设计](../kernel-fusion-system-design.md)。已完成的第一章保留为可选延伸阅读。
 
-> 本专题在 [Burn 综合地图](../summary.md)（概述：类型栈、Autodiff、Fusion 流、channel 重构）之后，聚焦 **融合运行时的逐机制追踪**——从一次 `Tensor::from_data()` 向下穿过双客户端-服务器架构，到 `elemwise_fuse` kernel 在 GPU 上执行。
+# Burn Fusion 专题写作计划（已归档）
 > **读计划前**：若你尚未读过 Burn 的类型栈概览，可先扫一眼 [Burn 地图 · 架构一览](../summary.md#架构一览)（5 分钟），再回到这里。
 
 ---
