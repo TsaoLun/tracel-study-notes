@@ -144,6 +144,42 @@ cd src && cargo check -p burn-test -p ch1-gelu-variants
 
 ---
 
+## 前置知识参考
+
+如果以下概念不熟悉，建议先花几分钟建立直觉再开始阅读。不需要深入——能理解"为什么存在这个机制"就够。
+
+### Rust trait 与泛型
+
+Burn 的类型栈 `Autodiff<Fusion<CubeBackend<WgpuRuntime>>>` 通过 trait 嵌套实现编译期后端组合。需要理解：trait 是什么（接口）、泛型参数如何单态化（编译期为每种具体类型生成独立代码）、`PhantomData` 的作用（标记类型关系但不持有值）。
+
+- **快速入门**：[Rust Book §10](https://doc.rust-lang.org/book/ch10-00-generics.html)（泛型+trait）和 [§19.9](https://doc.rust-lang.org/book/ch19-09-advanced-traits.html)（PhantomData）
+- **本文相关**：理解 `struct Autodiff<B, C>` 中 B 不是运行时参数，而是编译期类型——rustc 会为 `Autodiff<Fusion<CubeBackend<WgpuRuntime>>>` 生成一份独立的机器码
+
+### GPU 执行模型
+
+Kernel 在 GPU 上以 workgroup（也叫 thread block 或 CUDA block）为单位并行执行。每个 workgroup 内共享一块快速的共享内存（shared memory，在 CUDA 上对应用户管理的 L1 cache），workgroup 之间无法直接通信。寄存器是每个线程（work item）最快速的私有存储。全局内存（GPU DRAM）是所有 workgroup 共享但访问延迟最高的。
+
+**为什么关心这个**：Fusion 之所以有效，是因为中间结果不再写回全局内存再读出来；Autotune 之所以必要，是因为 tile 大小和 workgroup 大小需要匹配这三层存储的大小和带宽。
+
+- **快速入门**：[CUDA Refresher: The GPU Computing Ecosystem](https://developer.nvidia.com/blog/tag/cuda-refresher/) 的 Memory Hierarchy 和 Execution Model 章节
+- **本文相关**：理解 "staging buffer"（暂存区）、"vectorization width"（向量化宽度：一个线程同时处理几个元素）、"occupancy"（活跃 warp 数与最大值的比值，受寄存器压力影响）
+
+### Kernel launch overhead
+
+CPU 触发 GPU kernel 执行需要：设置 grid/block 参数、传输参数到 GPU 内存、驱动调度。这个开销是 5-10 μs 量级，与许多 element-wise op 的计算时间相当——因此单独 launch 极低效，融合后一次 launch 跑多个 op 才有收益。
+
+- **本文相关**：Fusion 文章开篇的数字直接来自这个开销——理解它才能理解"为什么需要融合"不是一个架构偏好，而是性能硬约束
+
+### 自动微分（Autodiff）
+
+反向传播（backpropagation）通过链式法则计算梯度。前向计算时记录每个 op 的输入→输出关系，反向时从输出端开始沿依赖链逆向传播梯度，每个 op 的梯度用链式法则与上游梯度相乘。
+
+**本文相关**：需要在概念上理解"前向图"和"反向图"的对应关系——Burn 的 Autodiff 在 forward 执行时同时注册 backward 步骤，backward 时 BFS 逆向遍历执行。
+
+- **快速入门**：[CS231n 反向传播笔记](https://cs231n.github.io/optimization-2/) 的 Introduction 和前两节（计算图 + 链式法则），5-10 分钟可建立直觉
+
+---
+
 ## 仓库结构
 
 ```
