@@ -886,3 +886,13 @@ let grad_x = x.grad();
 | 检查点策略 | `burn/crates/burn-autodiff/src/checkpoint/strategy.rs` |
 | 类型状态 Builder | `burn/crates/burn-autodiff/src/ops/base.rs` |
 | 分布式同步 | `burn/crates/burn-autodiff/src/distributed.rs` |
+
+---
+
+## 继续阅读
+
+| ← 上一篇 | 下一篇 → |
+|-----------|----------|
+| [architecture.md](../architecture.md) — 跨项目设计哲学 | 任选一篇深入：[Fusion](kernel-fusion-system-design.md) · [Autotune](../cubecl/autotune-system-design.md) · [JIT](../cubecl/jit-compilation-pipeline.md) · [Autodiff](autodiff-system-design.md) |
+
+动手：[src/burn-test/](../../src/burn-test/) — `RUST_LOG=burn_fusion=trace` 观察融合日志

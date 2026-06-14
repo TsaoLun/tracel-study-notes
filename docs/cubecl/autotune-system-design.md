@@ -267,3 +267,7 @@ pub struct TuneInput<'a, R, O> {
 - GPU 时间戳（Metal）：`cubecl/crates/cubecl-wgpu/src/compute/timings.rs`
 - Matmul 30+ 候选策略：`burn/crates/burn-cubecl/src/kernel/matmul/tune/base.rs`
 - Fusion 场景 autotune：`burn/crates/burn-cubecl-fusion/src/tune.rs`
+
+---
+
+← [Fusion 系统设计](../burn/kernel-fusion-system-design.md) | → 下一篇：[JIT 编译管线](jit-compilation-pipeline.md)

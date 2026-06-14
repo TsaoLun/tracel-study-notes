@@ -258,3 +258,7 @@ Burn 没有 "grad of grad"。图在反向传播中被消费，`Gradients` 容器
 - 操作与 Backward trait：`burn/crates/burn-autodiff/src/ops/tensor.rs`、`ops/backward.rs`
 - 检查点：`burn/crates/burn-autodiff/src/checkpoint/`（`builder.rs`、`base.rs`、`retro_forward.rs`、`strategy.rs`）
 - 梯度容器：`burn/crates/burn-autodiff/src/grads.rs`
+
+---
+
+← [JIT 编译管线](../cubecl/jit-compilation-pipeline.md) | → [全景篇](burn-systems-architecture.md)（返回入口）

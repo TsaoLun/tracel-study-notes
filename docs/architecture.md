@@ -264,3 +264,7 @@ Tracel 的独特之处在于：**三种推迟机制共享一个宿主语言（Ru
 | CubeK | [cubek/summary.md](cubek/summary.md)（待写） | — |
 
 *Tracel 底层机制系列 · 跨项目架构地图 · 导航见 [README](../README.md)*
+
+---
+
+→ 下一篇：[全景篇](burn/burn-systems-architecture.md) — 一行代码穿行四个核心系统

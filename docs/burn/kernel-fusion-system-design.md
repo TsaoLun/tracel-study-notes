@@ -246,3 +246,9 @@ Burn 的路线适合**动态计算图 + 高重复性的计算模式**（比如 L
 - CubeCL 融合实现：`burn/crates/burn-cubecl-fusion/src/`
 - 内存管理：`cubecl/crates/cubecl-runtime/src/memory_management/`
 - CubeCL 运行时：`cubecl/crates/cubecl-wgpu/src/compute/`
+
+---
+
+← [全景篇](burn-systems-architecture.md) | → 下一篇：[Autotune 系统设计](../cubecl/autotune-system-design.md)
+
+动手：[src/burn-test/](../../src/burn-test/) — `RUST_LOG=burn_fusion=trace` 观察融合日志

@@ -199,3 +199,5 @@ CubeK 对 Burn 暴露的是**算子级别的成品接口**——Burn 不关心 m
 | **Plane** | CubeCL 的锁步协作单元（对应 CUDA warp / WebGPU subgroup） |
 
 *Burn 底层机制 · CubeK 地图 · 导航见 [README](../../README.md)*
+
+← [Autotune 系统设计](../cubecl/autotune-system-design.md)（CubeCL autotune，CubeK 的 autotune 基于相同框架）

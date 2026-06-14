@@ -313,3 +313,9 @@ Cache path: {root}/spirv_{vendor}_{device}/{version}/{key_hash}
 - Pipeline 创建与缓存：`cubecl/crates/cubecl-wgpu/src/compute/server.rs`
 - GPU dispatch：`cubecl/crates/cubecl-wgpu/src/compute/stream.rs`
 - KernelId：`cubecl/crates/cubecl-runtime/src/id.rs`
+
+---
+
+← [Autotune 系统设计](autotune-system-design.md) | → 下一篇：[Autodiff 系统设计](../burn/autodiff-system-design.md)
+
+动手：[src/ch1-gelu-variants/](../../src/ch1-gelu-variants/) — GELU kernel 变体练习 · [src/ch2-expand-study/](../../src/ch2-expand-study/) — 宏展开观察

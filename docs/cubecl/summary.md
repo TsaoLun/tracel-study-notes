@@ -24,3 +24,7 @@ CubeCL 是 Tracel 生态的多平台 GPU 编译器。本项目围绕系统设计
 ## 跨项目
 
 - [架构主线](../architecture.md) — Tracel 生态共享的"决策推迟"设计哲学
+
+---
+
+→ 推荐入口：[全景点](../burn/burn-systems-architecture.md) · [所有文章导航](../../README.md)
