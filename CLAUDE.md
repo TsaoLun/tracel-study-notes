@@ -18,15 +18,13 @@ docs/                          ← 分析文档（Markdown，不可执行）
     summary.md                 ← （导航）指向系统设计文章 + 章节教程的索引
     index.md                   ← （计划）章节写作计划 + 入门引导
     N-title.md                 ← （章节）跟练教程、逐机制展开源码
+  appendix/                    ← 附录（翻译、归档）
 
 src/                           ← 示例与作业（Cargo workspace，可执行）
   Cargo.toml                   ← workspace 根，members 列出每个章节对应的 crate
   <chapter-crate>/             ← 一个章节对应一个 crate
     Cargo.toml                 ← 依赖路径指向 ../../burn 或 ../../cubecl
     src/main.rs | src/lib.rs
-
-appendix/                      ← 附录（翻译、归档）
-  automatic-kernel-fusion.md   ← 旧博客中文翻译（含烧 2026.05 源码更新）
 
 burn/          (gitignored)    ← tracel-ai/burn 参考源码
 cubecl/        (gitignored)    ← tracel-ai/cubecl 参考源码
@@ -39,6 +37,18 @@ burn-onnx/     (gitignored)    ← tracel-ai/burn-onnx 参考源码
 **添新内容时**：
 - 新系统设计文章：放入对应 `<project>/` 目录，以 `<system>-system-design.md` 命名
 - 新章节教程：遵循 `N-title.md` 命名，对应 `src/<chapter-crate>/` 练习
+
+## 文档类型与导航
+
+| 类型 | 命名 | 导航要求 |
+|------|------|----------|
+| 系统设计 | `*-system-design.md` | 末尾 `← 上一篇 \| → 下一篇` 链入相邻文章 |
+| 导航页 | `summary.md` | 末尾 `→ 推荐入口` 指向系统设计文章或 README |
+| 章节计划 | `index.md` | 末尾链接系列索引 |
+| 章节教程 | `N-title.md` | 末尾 `← 系统设计文章 \| 下一章 →` |
+| 附录 | `appendix/*.md` | 末尾注明来源和更新日期 |
+
+五篇核心文章形成闭环：`architecture → 全景 → Fusion → Autotune → JIT → Autodiff → 全景`。添加新文章时更新上下游导航。图谱见 [README.md](README.md)。
 
 ## 命令
 
@@ -113,4 +123,4 @@ grep '^status' burn-onnx/crates/onnx-official-tests/expectations.toml | sort | u
 
 ## 相关文档
 
-系列导航见 [README.md](README.md)。
+系列导航见 [README.md](README.md)（知识图谱 + 阅读路径）。写作规范副本在 `.cursor/rules/writing-style.mdc`（Cursor 环境自动加载）。
