@@ -81,7 +81,7 @@
 
 | 概念 | 文章 | 小节 |
 |------|------|------|
-| 正交分层：trait 边界 + 各项目核心理念出处 | [architecture](architecture.md) | 四个项目，各自的核心 |
+| 类型栈 + Trait 边界 + 层间接口 | [architecture](architecture.md) | 层间接口、每层解决的问题 |
 | Tracel vs PyTorch/XLA | [architecture](architecture.md) | §九 |
 
 ---

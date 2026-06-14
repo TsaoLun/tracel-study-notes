@@ -48,7 +48,7 @@ cd src && cargo check -p burn-test -p ch1-gelu-variants
 
 ### 1. 建立坐标系
 
-**[architecture.md](docs/architecture.md)** — 跨项目分析。Burn 自称 Backend Decorator，CubeK 自称 strict separation of compile-time from execution，CubeCL 强调 composable from Rust to GPU IR。读完你知道这些组件为什么可以自由组合。
+**[architecture.md](docs/architecture.md)** — 类型栈、Trait 边界与分层组合。每层解决一个系统问题；层与层通过 trait 交互——上层只知道下层"能做什么"，不知道"怎么做"。
 
 > ✓ 完成标准：能用自己的话解释"为什么 Burn 的 Autodiff 和 Fusion 可以独立演进而不会冲突"。
 
