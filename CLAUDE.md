@@ -48,7 +48,7 @@ burn-onnx/     (gitignored)    ← tracel-ai/burn-onnx 参考源码
 | 章节教程 | `N-title.md` | 末尾 `← 系统设计文章 \| 下一章 →` |
 | 附录 | `appendix/*.md` | 末尾注明来源和更新日期 |
 
-五篇核心文章形成闭环：`architecture → 全景 → Fusion → Autotune → JIT → Autodiff → 全景`。添加新文章时更新上下游导航。图谱见 [README.md](README.md)。
+五篇核心文章形成闭环：`architecture → 全景 → Fusion → Autotune → JIT → CubeK → Autodiff → 全景`。添加新文章时更新上下游导航。图谱见 [README.md](README.md)。
 
 ## 命令
 

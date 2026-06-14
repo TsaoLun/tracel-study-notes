@@ -318,6 +318,8 @@ Cache path: {root}/spirv_{vendor}_{device}/{version}/{key_hash}
 
 ---
 
-← [Autotune 系统设计](autotune-system-design.md) | → 下一篇：[Autodiff 系统设计](../burn/autodiff-system-design.md)
+← [Autotune 系统设计](autotune-system-design.md) | → 下一篇：[CubeK Blueprint 纪律](../cubek/blueprint-routine-autotune.md)
+
+相关：[CubeK](../cubek/blueprint-routine-autotune.md) 用 Blueprint 纪律限制 JIT 缓存 key 的爆炸，与本篇的 `KernelId` 设计直接相关
 
 动手：[src/ch1-gelu-variants/](../../src/ch1-gelu-variants/) — GELU kernel 变体练习 · [src/ch2-expand-study/](../../src/ch2-expand-study/) — 宏展开观察

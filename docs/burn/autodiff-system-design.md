@@ -263,6 +263,6 @@ Burn 没有 "grad of grad"。图在反向传播中被消费，`Gradients` 容器
 
 ---
 
-← [JIT 编译管线](../cubecl/jit-compilation-pipeline.md) | → [全景篇](burn-systems-architecture.md)（返回入口）
+← [CubeK 架构纪律](../cubek/blueprint-routine-autotune.md) | → [全景篇](burn-systems-architecture.md)（返回入口）
 
 动手：[src/autodiff-test/](../../src/autodiff-test/) — 运行实验观察梯度累积和检查点

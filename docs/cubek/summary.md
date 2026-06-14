@@ -2,7 +2,7 @@
 
 ## 读前须知
 
-- **CubeK 是什么**：Tracel 的基于 CubeCL 的高性能算子库——提供 matmul、attention、convolution、reduce、quant、FFT 等成品内核。它在 CubeCL 编译器之上，用 Blueprint-Routine-Autotuner 三层纪律组织内核开发和性能调优。
+- **CubeK 是什么**：Tracel 的基于 CubeCL 的高性能算子库——提供 matmul、attention、convolution、reduce、quant、FFT 等成品内核。它在 CubeCL 编译器之上，用 Blueprint-Routine-Autotuner 三层纪律组织内核开发和性能调优。系统设计分析见 [blueprint-routine-autotune.md](blueprint-routine-autotune.md)。
 - **本文覆盖**：三层纪律的设计动机、TileKind 系统、kernel explosion 的预防策略、与 CubeCL compile/autotune 的分界线。本文不逐算子展开——各算子的具体内核变体在专题中展开。
 - **前置**：[CubeCL 地图](../cubecl/summary.md)（#[cube]、comptime、autotune 概念）。与 CubeCL 的关系是：CubeCL 提供"怎么写 kernel"的编译器框架；CubeK 提供"写好的 kernel"的成品库 + 纪律约束。
 - **机制基准**：cubek 仓库 `crates/cubek-std/src/tile/base.rs`（TileKind）、根目录 `GUIDE.md`（三层纪律）。源码行号为近似值。

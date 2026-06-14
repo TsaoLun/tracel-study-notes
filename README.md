@@ -22,20 +22,20 @@
                         │          （推荐入口，15-20 分钟）          │
                         └──┬─────────┬─────────┬─────────┬────────┘
                            │         │         │         │
-              ┌────────────▼──┐ ┌────▼──────┐ ┌▼──────────▼──┐ ┌─────────────┐
-              │ Fusion 系统设计│ │Autotune   │ │ JIT 编译管线 │ │ Autodiff    │
-              │               │ │ 系统设计   │ │              │ │ 系统设计    │
-              │ "融合怎么做的" │ │"最快实现  │ │ "#[cube]到GPU│ │ "梯度怎么算"│
-              │ 竞标·隔离·内存│ │ 怎么选的"  │ │ 二进制的管线"│ │ 装饰器·BFS  │
-              └───────┬───────┘ └─────┬──────┘ └──────┬───────┘ └──────┬──────┘
-                      │               │               │                │
-          ┌───────────▼───┐  ┌────────▼──────┐ ┌──────▼───────┐ ┌─────▼──────────┐
-          │ src/burn-test  │  │               │ │src/ch1-gelu- │ │               │
-          │ "上手融合日志" │  │               │ │   variants   │ │               │
-          └───────────────┘  └───────────────┘ │"GELU作业"    │ └───────────────┘
-                                               │src/ch2-expand│
-                                               │ "宏展开作业" │
-                                               └──────────────┘
+              ┌────────────▼──┐ ┌────▼──────┐ ┌▼──────────▼──┐ ┌▼─────────────┐ ┌─────────────┐
+              │ Fusion 系统设计│ │Autotune   │ │ JIT 编译管线 │ │CubeK Blueprint│ │ Autodiff    │
+              │               │ │ 系统设计   │ │              │ │ 架构纪律    │ │ 系统设计    │
+              │ "融合怎么做的" │ │"最快实现  │ │ "#[cube]到GPU│ │"怎么防kernel│ │ "梯度怎么算"│
+              │ 竞标·隔离·内存│ │ 怎么选的"  │ │ 二进制的管线"│ │  爆炸"       │ │ 装饰器·BFS  │
+              └───────┬───────┘ └─────┬──────┘ └──────┬───────┘ └──────┬──────┘ └──────┬──────┘
+                      │               │               │                │                │
+          ┌───────────▼───┐  ┌────────▼──────┐ ┌──────▼───────┐       │       ┌────────▼──────┐
+          │ src/burn-test  │  │               │ │src/ch1-gelu- │       │       │src/autodiff-  │
+          │ "上手融合日志" │  │               │ │   variants   │       │       │    test       │
+          └───────────────┘  └───────────────┘ │"GELU作业"    │       │       │ "梯度验证"    │
+                                               │src/ch2-expand│       │       └───────────────┘
+                                               │ "宏展开作业" │       │
+                                               └──────────────┘       │
 
                           ┌─────────────────┐
                           │ 章节跟练教程      │
@@ -79,11 +79,12 @@
 | # | 文章 | 内容 | 练习 |
 |---|------|------|:--:|
 | 0 | [architecture.md](docs/architecture.md) | 四项目共享的设计哲学：决策推迟 | — |
-| 1 | [全景篇](docs/burn/burn-systems-architecture.md) | Fusion → Autotune → JIT → Autodiff 全链路 | — |
+| 1 | [全景篇](docs/burn/burn-systems-architecture.md) | Fusion → Autotune → JIT → CubeK → Autodiff 全链路 | — |
 | 2 | [Fusion](docs/burn/kernel-fusion-system-design.md) | 惰性队列融合：竞标机制、Stream 隔离、Page/Slice 内存 | burn-test |
 | 3 | [Autotune](docs/cubecl/autotune-system-design.md) | 策略枚举 vs 参数网格、优先级剪枝、anchor 缓存 | — |
 | 4 | [JIT 编译管线](docs/cubecl/jit-compilation-pipeline.md) | `#[cube]` → IR → WGSL/SPIR-V/MSL → GPU | ch1, ch2 |
-| 5 | [Autodiff](docs/burn/autodiff-system-design.md) | 装饰器模式、类型状态图构建、BFS 逆序 | — |
+| 5 | [CubeK](docs/cubek/blueprint-routine-autotune.md) | Blueprint/Routine/Autotuner 三层纪律：如何防止 kernel 组合爆炸 | — |
+| 6 | [Autodiff](docs/burn/autodiff-system-design.md) | 装饰器模式、类型状态图构建、BFS 逆序 | autodiff-test |
 
 ### 章节教程
 
