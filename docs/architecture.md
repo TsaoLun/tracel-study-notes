@@ -80,7 +80,7 @@ fn sum_plane<F: Float>(input: &[F], output: &mut [F], #[comptime] plane: bool) {
 }
 ```
 
-`plane: true` 和 `plane: false` 生成**两份不同的 JIT 产物**。不支持 subgroup 的硬件上，编译器永远不会遇到包含 subgroup 指令的 kernel——因为 `plane: false` 那份产物压根不包含这些指令。
+`plane: true` 和 `plane: false` 生成**两份不同的 JIT 产物**。不支持 subgroup 的硬件上，编译器不会遇到包含 subgroup 指令的 kernel——因为 `plane: false` 那份产物不包含这些指令，硬件的支持检查在 kernel 选择阶段已完成。
 
 **代价**：首次 launch 的冷启动延迟。JIT 编译 + 代码优化的时间在首次 launch 时支付。磁盘缓存缓解了后续 launch，但首次比热路径慢是 JIT 的固有特性。
 
@@ -270,3 +270,5 @@ Tracel 的独特之处在于：**三种推迟机制共享一个宿主语言（Ru
 ---
 
 → 下一篇：[全景篇](burn/burn-systems-architecture.md) — 一行代码穿行四个核心系统
+
+[概念索引](concept-index.md) · [源码版本管理](SOURCE-VERSION.md)

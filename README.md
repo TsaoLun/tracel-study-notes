@@ -94,6 +94,13 @@
 | Burn Fusion | [1-client-server](docs/burn/fusion/1-client-server.md) | [8 章计划](docs/burn/fusion/index.md) |
 | Burn ONNX | — | [6 章计划](docs/burn/onnx/index.md) |
 
+### 工具文档
+
+| 文档 | 说明 |
+|------|------|
+| [concept-index.md](docs/concept-index.md) | 概念索引：~70 个关键概念 → 文章位置 |
+| [SOURCE-VERSION.md](docs/SOURCE-VERSION.md) | 源码基准、API 依赖矩阵、漂移检查清单 |
+
 ### 项目地图
 
 | 项目 | 导航页 | 章节计划 |

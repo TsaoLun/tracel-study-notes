@@ -127,7 +127,7 @@ pub enum Operation {
 
 1. **`ConstOperandSimplify`**（`post_processing/constant_prop.rs:24`）：半常量化简，处理如 `Add(0, x)` → `x`、`Mul(x, 1)` → `x`、`Mul(x, 0)` → `0`、`Div(x, 1)` → `x`，以及布尔短路（`true || x` → `true`）。这不是简单的"两个常量相加"——它消除的是**一边为常量的无用计算**，在融合 kernel 中尤为重要（融合的标量乘法 `x * 1.0` 会被直接移除）。
 
-2. **`ConstEval`**（`post_processing/constant_prop.rs:131`）：真正的常量求值。`Add(Constant(1.0), Constant(2.0))` → `Constant(3.0)`。支持三角函数、指数、对数——所有求值在编译器的 Rust 代码中用 `num_traits::Float` 完成，不生成任何 GPU 指令。
+2. **`ConstEval`**（`post_processing/constant_prop.rs:131`）：真正的常量求值。`Add(Constant(1.0), Constant(2.0))` → `Constant(3.0)`。支持三角函数、指数、对数——所有求值在编译器的 Rust 代码中用 `num_traits::Float` 完成，不引入 GPU 指令——求值在 host 侧完成。
 
 3. **`InlineAssignments`**（`post_processing/expression_merge.rs:13`）：建立替换表。当看到 `Copy(input)` 且输入和输出的类型匹配时，记录 `{out → input}`，后续所有使用 `out` 处替换为 `input`。`x = y; z = x + 1` 变为 `z = y + 1`。
 
