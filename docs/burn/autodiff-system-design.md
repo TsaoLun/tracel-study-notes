@@ -1,5 +1,7 @@
 # Burn 的 Autodiff 系统：装饰器模式、类型状态图构建与惰性检查点
 
+> `Autodiff<B, C>` 是一个编译期装饰器——不像 PyTorch 把 autograd 嵌入 tensor 运行时，Burn 将"是否需要梯度"编译为类型差异：推理时排除整个 autodiff crate，反向图在 BFS 逆序执行后自动销毁。
+
 ## Autodiff 在框架中的位置
 
 所有 ML 框架都需要计算梯度。PyTorch 的方案是将 autograd 引擎深度耦合到 tensor 类型和 C++ 运行时中。Burn 走了一条不同的路：**Autodiff 是一个装饰器（decorator），包裹在任意后端外面**。
@@ -20,7 +22,7 @@ type MyBackend = Autodiff<Fusion<CubeBackend<WgpuRuntime<AutoCompiler>>>>;
 
 嵌套顺序决定了执行语义：`Autodiff` 在最外层，所有前向操作先经过 autodiff 记录 gradient tape，再进入 fusion 引擎优化执行。Fusion 看不到 autodiff 的 tensor 包装——`ad_enabled()` 返回 `false`（`burn/crates/burn-fusion/src/backend.rs:51`）。
 
-这个架构的核心影响是 **autodiff 和 fusion 完全解耦**。前向融合发生在前向执行时，autodiff 记录发生在融合之前。反向传播则完全绕开 fusion 引擎，直接调用内层后端的操作。
+这个架构的核心影响是 **autodiff 和 fusion 完全解耦**。前向融合发生在前向执行时，autodiff 记录发生在融合之前。反向传播则完全绕开 fusion 引擎，直接调用内层后端的操作。融合引擎的系统设计见 [Burn Kernel Fusion 系统设计](kernel-fusion-system-design.md)。
 
 ---
 
@@ -242,7 +244,7 @@ Burn 没有 "grad of grad"。图在反向传播中被消费，`Gradients` 容器
 ## 限制
 
 1. **无高阶梯度**：图在反向传播中消费。需要 Hessian 的场景无法实现。
-2. **无反向融合**：反向传播的 element-wise 操作链独立执行，无法受益于 fusion 优化。这是在 `Autodiff<Fusion<B>>` 架构下的自然结果——autodiff 绕开了 fusion 层。
+2. **无反向融合**：反向传播的 element-wise 操作链独立执行，无法受益于 fusion 优化（融合引擎分析见 [Fusion 系统设计](kernel-fusion-system-design.md)）。这是在 `Autodiff<Fusion<B>>` 架构下的自然结果——autodiff 绕开了 fusion 层。
 3. **检查点粒度固定于 op 级**：`MemoryBound` vs `ComputeBound` 是 op 级的分类，无法做 segment 级或 layer 级的手动检查点。`BalancedCheckpointing` 是一次性选择，没有 fine-tuning 的空间。
 4. **图扁平化**：`HashMap<NodeId, StepBoxed>` 不保留图的层次结构。对于复杂图，BFS 重建拓扑信息有一定开销。但这对训练中计算图深度通常 < 1000 的场景是可接受的。
 5. **类型状态构建器复杂性**：`OpsPrep` 使用 Rust 的类型状态模式（type-state pattern）确保在编译期强制"先标记 memory_bound → 再添加 retro_forward → 再标记 parents → 再 finish"的正确顺序。但这导致 op 实现较为冗长——每个 op 需要约 50 行 boilerplate。
@@ -262,3 +264,5 @@ Burn 没有 "grad of grad"。图在反向传播中被消费，`Gradients` 容器
 ---
 
 ← [JIT 编译管线](../cubecl/jit-compilation-pipeline.md) | → [全景篇](burn-systems-architecture.md)（返回入口）
+
+动手：[src/autodiff-test/](../../src/autodiff-test/) — 运行实验观察梯度累积和检查点

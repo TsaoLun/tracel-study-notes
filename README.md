@@ -68,6 +68,7 @@
 | JIT 编译管线 | `src/ch1-gelu-variants/` | 写 GELU kernel 的三种变体 |
 | JIT 编译管线 | `src/ch2-expand-study/` | 观察 `#[cube]` 宏展开的 IR |
 | Fusion 系统设计 | `src/burn-test/` | `RUST_LOG=burn_fusion=trace` 观察融合 |
+| Autodiff 系统设计 | `src/autodiff-test/` | 观察梯度图构建和反向传播 |
 
 ---
 

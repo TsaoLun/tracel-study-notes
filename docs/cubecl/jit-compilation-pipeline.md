@@ -1,5 +1,7 @@
 # CubeCL 的 JIT 编译管线：宏展开、IR 设计与多平台代码生成
 
+> `#[cube]` 过程宏将 Rust 函数展开为 IR 操作 → 嵌套 Scope 树做定点优化 → WGSL/SPIR-V/MSL 三后端生成代码。与 Triton 的运行时 JIT 不同，CubeCL 的 comptime 特化在 Rust crate 编译期完成，GPU 编译在首次 launch 时触发并缓存。
+
 ## 问题：什么构成了一个 GPU 编译器
 
 GPU 编程的传统方式：用 CUDA C++ 写 kernel → nvcc 编译 → 加载 PTX → 启动。但 CubeCL 的目标是将 **Rust 函数直接变成 GPU 可执行代码**，且同时支持 CUDA、Metal、Vulkan、WebGPU。这需要一套完整的编译管线：
@@ -297,7 +299,7 @@ Cache path: {root}/spirv_{vendor}_{device}/{version}/{key_hash}
 
 3. **编译缓存维度爆炸**：即使是"同一个"融合 kernel，不同的 `#[comptime]` 操作序列产生不同的缓存条目。如果一个模型中有 20 种不同的融合模式，就有 20 个缓存条目。这在编译期（首次遇到每种模式时）累积延迟。
 
-4. **没有链接时优化**：CubeCL 的编译是 per-kernel 的。多个 kernel 之间无法共享常量池或做跨 kernel 的内联。在 kernel 数量多的场景下（如大的 fusion 图），每个 kernel 独立编译增加了缓存压力和首次执行延迟。
+4. **没有链接时优化**：CubeCL 的编译是 per-kernel 的。多个 kernel 之间无法共享常量池或做跨 kernel 的内联。在 kernel 数量多的场景下（如大的 fusion 图，见 [Burn Kernel Fusion 系统设计](../burn/kernel-fusion-system-design.md)），每个 kernel 独立编译增加了缓存压力和首次执行延迟。编译缓存和 [Autotune 缓存](autotune-system-design.md)正交——前者缓存编译后的 shader，后者缓存最快 kernel 索引。
 
 ---
 

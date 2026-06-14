@@ -5,6 +5,7 @@ members = [
     "ch2-expand-study",
     "ch3-trait-study",
     "burn-test",
+    "autodiff-test",
     "fusion-ch2-queue",
     "fusion-ch3-drain",
 ]

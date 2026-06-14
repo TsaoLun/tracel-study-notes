@@ -1,5 +1,7 @@
 # Burn 技术栈全景：从 Rust 代码到 GPU 执行的全链路
 
+> 以一行 `z = (x*2.0+1.0).tanh(); z.backward()` 穿行 Fusion、Autotune、JIT、Autodiff 四个核心系统，展示一个 training step 从 Rust 源码到 GPU 执行再到梯度计算的全链路。
+
 本文用一行代码贯穿全程：
 
 ```rust

@@ -1,10 +1,12 @@
 # CubeCL 的 Autotune 系统：策略枚举、优先级剪枝与量化缓存
 
+> CUBCL 不搜索参数网格——它让 kernel 作者枚举已验证的策略，在首次执行时 benchmark 选出最快者并缓存。与 Triton 的 exhaustive grid search 不同，它用人力换候选最少化，用优先级剪枝换早停。
+
 ## 为什么需要 Autotune
 
 矩阵乘法 `C = A × B`。A 的形状是 [1, 4096]，B 是 [4096, 4096]——这是一次 matvec。同样的乘法，A 是 [4096, 4096]，B 是 [4096, 4096]——这是一次 gemm。同一个操作、同一份代码、同一块 GPU，最优的 tile size、workgroup 大小、向量化宽度完全不同。
 
-更复杂的场景：gemm + bias + relu 被 fusion 合并成一个 kernel 后，最优参数又变了——因为寄存器压力不同，memory bound vs compute bound 的平衡点也不同。
+更复杂的场景：gemm + bias + relu 被 fusion 合并成一个 kernel 后（融合机制见 [Burn Kernel Fusion 系统设计](../burn/kernel-fusion-system-design.md)），最优参数又变了——因为寄存器压力不同，memory bound vs compute bound 的平衡点也不同。
 
 **不存在一套参数在所有场景下最优**。Autotune 就是在运行时为具体的 (shape, dtype, hardware, fusion_combination) 搜索最佳 kernel 实现。
 
