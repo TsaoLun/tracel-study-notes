@@ -82,7 +82,8 @@
 | 概念 | 文章 | 小节 |
 |------|------|------|
 | 类型栈 + Trait 边界 + 层间接口 | [architecture](architecture.md) | 层间接口、每层解决的问题 |
-| Tracel vs PyTorch/XLA | [architecture](architecture.md) | §九 |
+| Tracel vs PyTorch/XLA | [architecture](architecture.md) | 与 PyTorch/XLA 的架构对比 |
+| 各层决策时机 | [architecture](architecture.md) | 各层决策时机 |
 
 ---
 

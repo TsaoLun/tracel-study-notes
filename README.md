@@ -8,7 +8,7 @@
 
 需要了解——每个概念后面附了快速学习资源。不深入，能理解"为什么存在这个机制"就够。
 
-**Rust trait 与泛型**：Burn 的类型栈 `Autodiff<Fusion<CubeBackend<WgpuRuntime>>>` 通过 trait 嵌套实现编译期后端组合。需要理解：trait 是什么（接口）、泛型参数如何单态化（编译期为每种具体类型生成独立代码）、`PhantomData` 的作用（标记类型关系但不持有值）。
+**Rust trait 与泛型**：Backend 组合在 Device/类型栈层通过 trait 嵌套单态化（如 `Autodiff<Fusion<CubeBackend<WgpuRuntime>>>`）；用户侧 `Tensor` 只有维度与元素类型泛型，经 `BridgeTensor` 按 `Device` 路由。需要理解：trait 是什么（接口）、泛型参数如何单态化（编译期为每种具体类型生成独立代码）、`PhantomData` 的作用（标记类型关系但不持有值）。
 - [Rust Book §10](https://doc.rust-lang.org/book/ch10-00-generics.html)（泛型+trait）和 [Nomicon: PhantomData](https://doc.rust-lang.org/nomicon/phantom-data.html)
 
 **GPU 执行模型**：Kernel 在 GPU 上以 workgroup（也叫 thread block/CUDA block）为单位并行执行。workgroup 内共享一块快速的 shared memory（对应用户管理的 L1 cache），workgroup 间无法直接通信。寄存器是每个线程最快速的私有存储，全局内存（GPU DRAM）所有 workgroup 共享但访问延迟最高。Fusion 之所以有效，是因为中间结果不再写回全局内存再读出来；Autotune 之所以必要，是因为 tile 大小需要匹配这几层存储的大小和带宽。
@@ -48,7 +48,7 @@ cd src && cargo check -p burn-test -p ch1-gelu-variants
 
 ### 1. 建立坐标系
 
-**[architecture.md](docs/architecture.md)** — 类型栈、Trait 边界与分层组合。每层解决一个系统问题；层与层通过 trait 交互——上层只知道下层"能做什么"，不知道"怎么做"。
+**[architecture.md](docs/architecture.md)** — 类型栈、Trait 边界与分层组合。每层解决一个系统问题；层与层通过 trait 交互——上层只知道下层"能做什么"，不知道"怎么做"。`Tensor` 经 `Device` 路由，Backend 组合在框架内部展开。
 
 > ✓ 完成标准：能用自己的话解释"为什么 Burn 的 Autodiff 和 Fusion 可以独立演进而不会冲突"。
 

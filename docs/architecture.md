@@ -10,7 +10,7 @@
 3. 为什么这些层可以独立演进——改 CubeK 的 tile 策略不需要改 Burn 的代码
 4. 和 PyTorch/XLA 的架构差异——同样的问题，不同的分层选择
 
-不解释 Rust 语法本身。Rust 的 trait 和泛型是工具，架构的核心是**怎么用 trait 切分关注点**。
+Trait 在这里的角色是定义层与层之间的合约。每层能做什么、不能做什么，由它暴露的 trait 方法签名决定。
 
 ---
 
@@ -18,32 +18,33 @@
 
 ```
 用户代码: model.forward(&input)
-    ↓ 调用 Burn tensor 操作（matmul, relu, tanh, ...）
+    ↓ Tensor API（matmul, relu, tanh, ...）
+    ↓ BridgeTensor 按 Device 路由——用户侧不写 Backend 泛型
+
+装饰器链（Device 类型在编译期展开，例如 Wgpu = Autodiff<Fusion<CubeBackend<...>>>）：
 
 ┌─────────────────────────────────────────────────────────┐
-│ Autodiff<B>         装饰器。前向时记录梯度图；.backward()  │
-│                      时 BFS 逆序遍历执行反向步骤。        │
-│   ↓ 做完了 autodiff 的事，把操作交给内层                │
-│                                                         │
-│ Fusion<B>            装饰器。操作入队不执行；drain 时     │
-│                      探索融合方案，缓存到 ExecutionPlanStore│
-│   ↓ 融合后的操作交给内层                                │
-│                                                         │
-│ CubeBackend<R>       CubeCL 运行时的桥梁。注册融合 fuser  │
-│                      实现，把 tensor 操作映射到 CubeCL。   │
+│ Autodiff<B>         装饰器。前向：记录梯度图后把 op 交给 │
+│                      内层；.backward() 时 BFS 逆序执行   │
 │   ↓                                                    │
-│                                                         │
-│ CubeCL Runtime       JIT 编译 #[cube] kernel → IR →     │
+│ Fusion<B>            装饰器。前向 op 入队；drain 时探索  │
+│                      融合，缓存到 ExecutionPlanStore     │
+│   ↓                                                    │
+│ CubeBackend<R>       CubeCL 桥梁。注册 fuser，映射 op   │
+│   ↓                                                    │
+│ CubeCL Runtime       JIT #[cube] kernel → IR →          │
 │                      WGSL/SPIR-V/MSL → GPU 执行          │
-│                                                         │
-│ CubeK                （可选）成品算子库。用 Blueprint 纪律  │
-│                      为 matmul 等核心 op 提供高性能实现。  │
 └─────────────────────────────────────────────────────────┘
     ↓
 GPU（CUDA / Metal / Vulkan / WebGPU）
+
+    CubeK（可选，非装饰器层）
+    matmul 等 op 在 CubeBackend 内调用；Blueprint 纪律 + autotune 选策略
 ```
 
-Autodiff 和 Fusion 都是装饰器——它们包裹内层后端，在内层操作的基础上附加自己的行为。Autodiff 附加梯度跟踪，Fusion 附加操作排队和融合优化。CubeBackend 是通往 CubeCL 运行时的桥。CubeCL 是 GPU 代码生成层。CubeK 在 CubeCL 之上提供成品算子。
+Autodiff 和 Fusion 都是装饰器——包裹内层后端，在内层操作之上附加梯度跟踪或入队融合。CubeBackend 连接 CubeCL Runtime。CubeK 不参与类型栈嵌套：CubeBackend 在特定 op 上可选调用 CubeK 实现，再经 CubeCL launch。
+
+`Tensor` 的泛型参数是维度 `D` 和元素类型 `K`，不含 `Backend`（`burn/crates/burn-tensor/src/tensor/api/base.rs`）。Backend 组合体现在 `Device` 与内部 `BridgeTensor` 路由上——类型栈对框架内部成立，用户 API 保持无泛型传染。细节见 [全景篇 §2](burn/burn-systems-architecture.md)。
 
 同样的 tensor 操作向下穿过这些层时，每一层只改变**执行方式**（延迟？融合？跟踪梯度？），不改变**计算结果**。
 
@@ -67,13 +68,12 @@ CubeCL       ──ComputeServer trait──→  GPU Driver
     "编译好的 shader，帮我 dispatch"
 ```
 
-关键的架构约束：**上层不能绕过 trait 直接调用下层的内部方法**。这就意味着：
+关键的架构约束：**上层不能绕过 trait 直接调用下层的内部方法**。trait 表面由设计收窄；每层的 trait 方法签名定义对外能力，上层无法调用不在 trait 上的方法。以 `Autodiff<Fusion<CubeBackend<R>>>` 为例：
 
-- Autodiff 反向传播时直接调 `B::float_matmul` 等操作——它不经过 Fusion 的排队。这是 Autodiff 和 Fusion 正交的根本原因。
-- Fusion 不知道 gradient 的存在——它的输入是 `OperationIr` 序列，不区分前向和反向操作。
-- CubeCL 不知道 `OperationIr` 的存在——它只接收 `KernelDefinition`（编译好的 IR），不关心这个 kernel 是融合来的还是单独 launch 的。
-
-这种分层并不是"设计成这样"——它是 trait 边界的自然结果。每层的 trait 方法签名就是它的全部能力；上层无法调用不在 trait 上的方法。
+- **前向**：Autodiff 记录梯度图后，经 `Backend` trait 把 op 交给 `Fusion<B>` 入队；drain 时才真正执行。Autodiff 与 Fusion 在前向路径上串联。
+- **反向**：Autodiff 的 `Backward` 步骤直接调内层后端的 op（`B::float_matmul` 等），不经 Fusion 的入队与融合引擎——反向 op 当前以独立 kernel 执行。两层在反向路径上解耦。
+- Fusion 在前向路径上只处理 `OperationIr` 序列——不感知 autodiff 的 gradient 语义（`ad_enabled()` 对内层为 `false`，见 `burn/crates/burn-fusion/src/backend.rs`）。
+- CubeCL 只接收 `KernelDefinition`（编译好的 IR），不知道 `OperationIr`，也不关心 kernel 来自融合还是单独 launch。
 
 ---
 
@@ -85,7 +85,7 @@ CubeCL       ──ComputeServer trait──→  GPU Driver
 
 **方案**：Autodiff 是装饰器，不是 tensor 的内置属性。`CubeBackend` 上没有 `.backward()`。`Autodiff<CubeBackend>` 上有。推理时用 `CubeBackend`，训练时用 `Autodiff<CubeBackend>`——编译期决定是否链接 autodiff crate。
 
-**和 Fusion 的边界**：autodiff 记录梯度图时调用内层后端的具体操作（`B::float_matmul` 等），绕过了 Fusion 的排队。反向传播时也直接调内层操作，不经过 Fusion。
+**和 Fusion 的边界**：前向时 Autodiff 记录 gradient tape，再把 op 交给内层 `Fusion<B>` 入队融合。反向时各 `Backward` 步骤直接调内层后端 op，不经 Fusion 融合引擎——前向融合与反向执行因此在路径上分离。
 
 [系统设计](burn/autodiff-system-design.md)
 
@@ -129,12 +129,28 @@ CubeCL       ──ComputeServer trait──→  GPU Driver
 
 ---
 
+## 各层决策时机
+
+各项目用各自的术语描述「何时做选择」。下表列典型决策与触发时机，便于跨项目对照（非源码中的统一命名）：
+
+| 层 | 典型决策 | 时机 |
+|----|----------|------|
+| Burn 类型栈 | 是否链接 autodiff crate、Device 对应哪种 Backend 组合 | `cargo build`（monomorphization） |
+| Fusion | 连续 op 如何合并、何时 drain | 读张量 / sync 点（运行时） |
+| CubeCL | `KernelId` 对应哪份 shader | 首次 launch JIT cache miss |
+| CubeK | 同 Blueprint 下哪条 matmul 策略最快 | 新 `AutotuneKey` 首次 benchmark |
+| Burn-ONNX | ONNX 图 → 哪份 Rust 源码 | `build.rs` 执行时 |
+
+Fusion 的 drain 发生在运行时；Burn 的 Backend 选择在编译期——两者机制不同，不必强行归入同一时间轴。
+
+---
+
 ## 与 PyTorch/XLA 的架构对比
 
 | 维度 | PyTorch | XLA | Tracel |
 |------|---------|-----|--------|
 | **autograd 的位置** | 嵌入 tensor（`grad_fn` 指针） | 嵌入 HLO 图（反向是图变换） | 装饰器（`Autodiff<B>`），编译期可选 |
-| **后端的切换** | 运行时 `tensor.to(device)` + Dispatch Key 查表 | 编译期（XLA 编译整个图） | 编译期 trait 单态化 |
+| **后端的切换** | 运行时 `tensor.to(device)` + Dispatch Key 查表 | 编译期（XLA 编译整个图） | `Device` 路由 + Backend 类型栈编译期单态化（用户侧无 Backend 泛型） |
 | **算子融合** | Dynamo trace + Inductor 编译 | XLA HLO fusion pass（编译期规则） | 惰性入队 + drain 时探索 + ExecutionPlanStore 缓存 |
 | **GPU 代码生成** | AOT（nvcc 预编译 CUDA kernel）+ Triton JIT | AOT（XLA → PTX/Metal） | JIT（首次 launch，`#[cube]` → IR → WGSL/SPIR-V/MSL） |
 | **kernel 选择** | 手写 CUDA kernel + Triton autotune（Python 参数网格） | 后端固定实现 | autotune（策略枚举 + 优先级剪枝 + anchor 缓存） |

@@ -160,10 +160,10 @@ pub enum ComputingProperty {
 | 层 | 在前向时做什么 | 在反向时做什么 |
 |----|---------------|---------------|
 | **Autodiff** | 拦截浮点 op，记录 Node 到梯度图 | 逆拓扑序遍历图，执行各 op 的梯度计算 |
-| **Fusion** | 把连续 op 延迟入队，drain 时融合 | 梯度 op 同样入队，同样可能被融合 |
+| **Fusion** | 把连续 op 延迟入队，drain 时融合 | 不参与——反向 op 直接调内层后端，不经融合引擎 |
 | **CubeBackend** | 执行融合后的 kernel（GPU 上） | 执行梯度 kernel（GPU 上） |
 
-关键洞察：**Autodiff 的图节点在 CPU 上，Fusion 的融合在 GPU 侧**。两层各自决策，互不穿透——Autodiff 不需要知道 Fusion 把哪些 op 融合了（它只记录"逻辑上发生了什么 op"），Fusion 不需要知道哪些 op 是 forward、哪些是 backward（它们都是浮点 op，都可融合）。
+关键洞察：**Autodiff 的图节点在 CPU 上，Fusion 的融合在前向 GPU 路径上**。Autodiff 记录的是逻辑 op 序列，不必知道 Fusion 把哪些 op 合并了；反向路径绕开 Fusion 入队，因此当前无反向融合（见 [Autodiff 系统设计](../autodiff-system-design.md)）。
 
 ---
 

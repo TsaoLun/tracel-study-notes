@@ -247,8 +247,6 @@ Burn 的路线适合**动态计算图 + 高重复性的计算模式**（比如 L
 
 ## 关键源码入口
 
-本文不逐行展示代码，但对这篇设计感兴趣的读者可以从以下入口开始阅读源码：
-
 - 融合引擎：`burn/crates/burn-fusion/src/`
 - CubeCL 融合实现：`burn/crates/burn-cubecl-fusion/src/`
 - 内存管理：`cubecl/crates/cubecl-runtime/src/memory_management/`
