@@ -48,7 +48,7 @@ cd src && cargo check -p burn-test -p ch1-gelu-variants
 
 ### 1. 建立坐标系
 
-**[architecture.md](docs/architecture.md)** — 跨项目分析：从源码中提取一条共享模式——decision deferral（L1 编译期 → L2 JIT 时 → L3 首次执行）。读完你知道这些组件为什么可以自由组合。
+**[architecture.md](docs/architecture.md)** — 跨项目分析：Burn 的 Backend Decorator、CubeCL 的 JIT、CubeK 的 minimal Blueprint——同一条共性（特殊化后移）在三个层次上以三种技术实现。读完你知道这些组件为什么可以自由组合。
 
 > ✓ 完成标准：能用自己的话解释"为什么 Burn 的 Autodiff 和 Fusion 可以独立演进而不会冲突"。
 

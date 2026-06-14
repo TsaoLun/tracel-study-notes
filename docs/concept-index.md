@@ -81,7 +81,7 @@
 
 | 概念 | 文章 | 小节 |
 |------|------|------|
-| L1/L2/L3 决策推迟 | [architecture](architecture.md) | §一 |
+| 特殊化后移（L1/L2/L3） | [architecture](architecture.md) | §一 |
 | Tracel vs PyTorch/XLA | [architecture](architecture.md) | §九 |
 
 ---
