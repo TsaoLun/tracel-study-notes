@@ -13,7 +13,7 @@ The Tracel study notes project has document tracks:
 
 ## Reading chain
 
-`architecture → 全景 → Fusion → Autotune → JIT → CubeK → Autodiff → 全景`
+`architecture → 全景 → Fusion → JIT → Autotune → CubeK → Autodiff`
 
 Six articles form a closed-loop reading chain. Each article has prev/next navigation footer + cross-reference inline links. New articles must update neighboring articles' navigation.
 

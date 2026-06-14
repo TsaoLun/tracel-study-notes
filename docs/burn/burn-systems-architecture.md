@@ -895,4 +895,4 @@ let grad_x = x.grad();
 
 ## 继续阅读
 
-← [architecture.md](../architecture.md) — 跨项目设计哲学 | → 下一篇：[Fusion 系统设计](kernel-fusion-system-design.md)
+← [architecture.md](../architecture.md) — 类型栈与分层 | → 下一篇：[Fusion 系统设计](kernel-fusion-system-design.md)
