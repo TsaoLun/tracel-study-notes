@@ -23,7 +23,7 @@ CubeK（成品内核）
     ├── cubek-reduce    ← 规约（sum、max、argmax、per-cube / per-plane）
     ├── cubek-quant     ← 量化（symmetric、per-block、q2-q8、fp4）
     ├── cubek-random    ← 随机数（bernoulli、normal、uniform）
-    ├── cubek-fft       ← 快速傅里叶变换
+    ├── cubek-fft       ← 快速傅里叶变换（rfft / cfft / irfft）
     ├── cubek-pool      ← 池化
     └── cubek-interpolate ← 插值
     ↓

@@ -7,7 +7,7 @@
 | burn | `78f10aec1` | 2026-06-10 | 六篇文章的源码校验基准 |
 | cubecl | `35b861d0` | 2026-06-12 | JIT 管线、autotune 和 CubeK 的源码基准 |
 | burn-onnx | `846b2452` | 2026-06-11 | ONNX AOT 分析基准 |
-| cubek | `c6a0bf40` | 2026-06-12 | CubeK 分析基准 |
+| cubek | `4ccfc4f2` | 2026-06-16 | CubeK 分析基准 |
 
 ## 更新参考仓库
 
@@ -82,10 +82,12 @@ cd cubek  && git pull && cd ..
 |---------|------|----------|
 | `Blueprint` trait (Hash+Eq) | 低 | trait 边界稳定 |
 | `Routine` trait | 中 | 方法可能增加 |
-| `Strategy` 枚举变体数量 | 高 | 新策略持续增加 |
-| `TileMatmulKind` 枚举 | 中 | 新变体可能添加 |
+| `Strategy` 枚举变体数量 | 高 | 新策略持续增加（当前 ~41 变体） |
+| `TileMatmulKind` 枚举 | 中 | 5 种变体稳定 |
 | `MatmulAutotuneKey` 字段 | 中 | stride_factor 等可能细调 |
 | `TilingScheme` | 低 | 分层块模型稳定 |
+| `Tile` 结构体 (`cubek-tile`) | 中 | 内部字段可能重构（如 check 移到 MemData） |
+| `TileKind` 枚举 (`cubek-std`) | 低 | 13 种计算变体稳定 |
 
 ## 漂移检查清单
 
@@ -108,3 +110,18 @@ CubeCL commit `35b861d0` (`refactor: Simplify Variable to align it with existing
 **影响文章**：`jit-compilation-pipeline.md` 中讨论 `Variable` 和 `VariableKind` 的段落需要更新命名，但概念性描述（SSA 版本控制、内建变量、常量）仍然准确。
 
 **状态**：待更新——低优先级（概念正确，命名偏旧）。
+
+### 2026-06-16: cubek `4ccfc4f2` — 模块重组、Strategy 扩展与 cfft 公开
+
+CubeK `c6a0bf40` → `4ccfc4f2` 之间的 4 个提交包含了以下变化：
+
+1. **模块重组** (`51fda58b`)：`cubek-matmul/src/launch/` 目录不再存在，`strategy.rs` 和 `tune_key.rs` 移入 `cubek-matmul/src/strategy/`。旧的 `launch/strategy.rs` 已改为 `strategy/strategy.rs`。`cubek-tile` 中 `Tile.check` 字段移入 `MemData.check`，`register.rs` 和 `schedule.rs` 从 `matmul/mod.rs` 中独立。
+2. **Strategy 变体增加** (`51fda58b`)：从 ~34 个变体增加到 41 个。新增 `SimpleVecMat`/`DoubleVecMat`（VecMat inner product）、`GemvUnitPerpendicular`（GEMV）、`Gemm`/`CpuGemm`（CPU GEMM）等路径。
+3. **cfft 公开** (`b0d8226c`)：`cubek-fft` 新增公开的 complex FFT（cfft）模块，原有的 rfft/irfft 现在与 cfft 并列。
+4. **Reduce shared memory 限制** (`f44bd68d`)：`cubek-reduce` 的 Cube routine 现在对 ArgTopK/TopK 推断的 reduce width 做了 shared memory 上限钳制。
+
+**影响文章**：
+- `blueprint-routine-autotune.md`：Strategy 变体数量、源码路径（launch/ → strategy/）、autotune key 路径 —— **已更新**
+- `summary.md`：架构一览中 FFT 描述 —— **已更新**
+
+**状态**：✅ 已完成

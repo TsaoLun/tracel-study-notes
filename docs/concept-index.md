@@ -72,7 +72,7 @@
 | Blueprint/Routine/Autotuner 三层 | [CubeK](cubek/blueprint-routine-autotune.md) | §解决方案 |
 | `Blueprint` trait (Hash+Eq) | [CubeK](cubek/blueprint-routine-autotune.md) | §第 1 层 |
 | `Routine::expand_blueprint` 离散化 | [CubeK](cubek/blueprint-routine-autotune.md) | §第 2 层 |
-| `Strategy` ~34变体 + Auto 级联回退 | [CubeK](cubek/blueprint-routine-autotune.md) | §第 3 层 |
+| `Strategy` ~41变体 + Auto 级联回退 | [CubeK](cubek/blueprint-routine-autotune.md) | §第 3 层 |
 | `TileMatmulKind` 五种硬件路径 | [CubeK](cubek/blueprint-routine-autotune.md) | §TileMatmulKind |
 | kernel 组合爆炸 (vs CUTLASS) | [CubeK](cubek/blueprint-routine-autotune.md) | §与 CUTLASS 的对比 |
 | `TilingScheme` 四层大小 | [CubeK](cubek/blueprint-routine-autotune.md) | §与 CUTLASS 的对比 |
