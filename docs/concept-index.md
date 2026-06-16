@@ -17,6 +17,7 @@
 | Page / Slice 内存模型 | [Fusion](burn/kernel-fusion-system-design.md) | §GPU 内存管理 |
 | `WgpuMemManager` 三池 | [Fusion](burn/kernel-fusion-system-design.md) | §GPU 内存管理 |
 | `ALLOC_AFTER_FREE` (5次) | [Fusion](burn/kernel-fusion-system-design.md) | §GPU 内存管理 |
+| `BURN_FUSION_LOG=full` 日志解读 | [burn-test README](../src/burn-test/README.md) | 三阶段逐行对照（Init→drain→cache） |
 
 ## Autotune
 

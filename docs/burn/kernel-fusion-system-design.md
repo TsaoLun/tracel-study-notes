@@ -88,8 +88,8 @@ Burn 没有全局计算图的概念。每个 tensor 操作被记录为 `Operatio
 
 关键点：**显示 tensor 值才触发执行，构建计算图不触发执行**。这和使用 tracing（`torch.jit.trace`）或 JIT 编译（`torch.compile`）有本质不同——不需要提前声明"这一段需要优化"，也不需要 warmup 迭代。
 
-> ▶ **动手**：`cd src/burn-test && RUST_LOG=burn_fusion=trace cargo run --release`
-> 设置 `RUST_LOG=burn_fusion=trace` 后运行，观察 `[stream]`（操作入队）、`[plan]`（Policy 决策）、`[explorer]`（探索融合机会）日志行。对照本节描述的 drain → process → explore 流程。
+> ▶ **动手**：`cd src/burn-test && BURN_FUSION_LOG=full cargo run --release`
+> 设置 `BURN_FUSION_LOG=full` 后运行，观察 `[stream]`（操作入队）、`[plan]`（Policy 决策）、`[explorer]`（探索融合机会）日志行。对照本节描述的 drain → process → explore 流程。
 
 ### 决策 3：探索 + 缓存的二级命中模型
 
@@ -110,9 +110,24 @@ Burn 没有全局计算图的概念。每个 tensor 操作被记录为 `Operatio
 - **accept**：操作可以被融合 → `num_ops++`（分数增加）
 - **reject**：操作无法被融合 → `status = Closed`（此 fuser 关闭，不再接受后续操作）
 
-当 Block 被优化时，选择**分数最高的 fuser** 的方案执行。
+当 Block 被优化时，`find_best_optimization_index()`（`search/block.rs:240`）遍历所有 fuser，找 `ready=true` 且 `score` 最高的：
 
-这个竞争机制优雅地解决了"没有全局计算图"的问题——不需要提前决定"这个序列应该用哪种优化器"。所有优化器同时尝试消化操作序列，最强的那个胜出。专用的优化器（如 MatmulFuser）通过加分策略获得优先级。
+```rust
+if properties.ready && properties.score > best_score {
+    best_index = Found { index, score };
+}
+```
+
+**`ready` 是关键门槛**——不是所有 fuser 对任意操作序列都能达到 ready。各 fuser 的 `ready` 条件不同：
+
+- `ElementWiseFuser`：`num_ops > 0` 即为 ready——任何被接受的 element-wise op 都能融合
+- `MatmulFuser`：仅当序列包含 matmul 操作。对纯 element-wise 序列，`ready = false`，直接退赛
+- `ReduceFuser`：需要 reduce 操作。同样 `ready = false`
+- `ReduceBroadcastedFuser`：同理
+
+对于 `MulScalar + AddScalar + Tanh`，三个 fuser 的 `ready == false`，只剩下 `ElementWiseFuser` 以唯一 ready 候选资格胜出。**不是四个竞选掉三个，是三个根本没参赛。** 这就是为什么 `BURN_FUSION_LOG=full` 日志中四条 `[fuser]` 都 `had 3 ops` 但最终 "fused ElementWise"——退赛的 fuser 也累积了操作数，但在 `find_best` 中被过滤掉了。
+
+专用 fuser（Matmul、Reduce）的加分策略只在它们自己的 `ready == true` 场景下生效：当序列同时包含 element-wise 和 matmul 操作时，`MatmulFuser` 可能以更高 score 击败 `ElementWiseFuser`——前提是它消化了足够多的操作来获得更高分数。
 
 **但这引入了一个微妙的问题**：如果操作序列的前半段是 element-wise（可以被 ElementWiseFuser 消化），后半段是 matmul（可以被 MatmulFuser 消化），Block 的 merging pass 可能无法正确处理这种边界。这是一个实实在在的限制。
 

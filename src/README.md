@@ -15,12 +15,12 @@ git clone https://github.com/tracel-ai/cubecl.git
 
 | 项目 | 对应文档 | 路径 | 运行方式 |
 |------|----------|------|----------|
-| **burn-test** | [docs/burn/fusion/1-client-server.md](../docs/burn/fusion/1-client-server.md) | [burn-test/](burn-test/) | `cd src/burn-test && RUST_LOG=burn_fusion=trace cargo run --release` |
+| **burn-test** | [docs/burn/fusion/1-client-server.md](../docs/burn/fusion/1-client-server.md) | [burn-test/](burn-test/) | `cd src/burn-test && BURN_FUSION_LOG=full cargo run --release` |
 | ch1-gelu-variants | [docs/cubecl/1-gelu-launch.md](../docs/cubecl/1-gelu-launch.md) | [ch1-gelu-variants/](ch1-gelu-variants/) | `cd src/ch1-gelu-variants && cargo test -- --nocapture` |
 | ch2-expand-study | [docs/cubecl/2-expand.md](../docs/cubecl/2-expand.md) | [ch2-expand-study/](ch2-expand-study/) | `cd src/ch2-expand-study && cargo test -- --nocapture` |
 | ch3-trait-study | [docs/cubecl/3-trait-impl.md](../docs/cubecl/index.md#章节目录)（待写） | [ch3-trait-study/](ch3-trait-study/) | `cd src/ch3-trait-study && cargo test -- --nocapture` |
-| fusion-ch2-queue | [docs/burn/fusion/2-operation-queue.md](../docs/burn/fusion/index.md#章节目录)（待写） | [fusion-ch2-queue/](fusion-ch2-queue/) | `cd src/fusion-ch2-queue && RUST_LOG=burn_fusion=trace cargo run --release` |
-| fusion-ch3-drain | [docs/burn/fusion/3-drain-processor.md](../docs/burn/fusion/index.md#章节目录)（待写） | [fusion-ch3-drain/](fusion-ch3-drain/) | `cd src/fusion-ch3-drain && RUST_LOG=burn_fusion=trace cargo run --release` |
+| fusion-ch2-queue | [docs/burn/fusion/2-operation-queue.md](../docs/burn/fusion/index.md#章节目录)（待写） | [fusion-ch2-queue/](fusion-ch2-queue/) | `cd src/fusion-ch2-queue && BURN_FUSION_LOG=full cargo run --release` |
+| fusion-ch3-drain | [docs/burn/fusion/3-drain-processor.md](../docs/burn/fusion/index.md#章节目录)（待写） | [fusion-ch3-drain/](fusion-ch3-drain/) | `cd src/fusion-ch3-drain && BURN_FUSION_LOG=full cargo run --release` |
 
 ### 待建骨架（对应未来章节）
 
@@ -42,7 +42,7 @@ git clone https://github.com/tracel-ai/cubecl.git
 
 ## burn-test 预期日志
 
-以 `RUST_LOG=burn_fusion=trace` 运行时，你会看到类似以下输出：
+以 `BURN_FUSION_LOG=full` 运行时，你会看到类似以下输出：
 
 - `[explorer]` — Explorer 探索融合机会
 - `[stream]` — StreamOptimizer 注册/停止

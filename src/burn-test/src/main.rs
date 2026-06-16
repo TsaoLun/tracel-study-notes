@@ -1,13 +1,13 @@
 //! Burn Fusion 专题 · 主示例
 //!
 //! 三行操作（clone, *, +, tanh）生成一个融合 kernel。
-//! 通过 RUST_LOG 观察融合日志。
+//! 通过 BURN_FUSION_LOG 环境变量观察融合日志。
 //!
 //! ## 运行
 //!
 //! ```bash
 //! cd src/burn-test
-//! RUST_LOG=burn_fusion=trace cargo run --release
+//! BURN_FUSION_LOG=full cargo run --release
 //! ```
 //!
 //! ## 预期日志（burn_fusion=trace 级别）
@@ -22,7 +22,7 @@
 use burn::prelude::*;
 
 fn main() {
-    // 初始化日志——设置 RUST_LOG 环境变量即可看到 fusion 内部日志
+    // 初始化环境——设置 BURN_FUSION_LOG=full 即可看到 fusion 内部日志
     env_logger::init();
 
     // Wgpu 默认启用 fusion，等价于 Wgpu = Fusion<CubeBackend<WgpuRuntime>>

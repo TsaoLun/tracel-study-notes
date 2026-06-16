@@ -20,13 +20,13 @@
 
 ---
 
-## 一分钟跑通：用 `RUST_LOG` 看两层各自干活
+## 一分钟跑通：用 `BURN_FUSION_LOG` 看融合日志
 
 在本仓库的 `src/burn-test/` 目录（需先在项目根 clone burn 仓库，见 [README](../../../README.md#仓库结构)）：
 
 ```bash
 cd src/burn-test
-RUST_LOG=burn_fusion=trace cargo run --release
+BURN_FUSION_LOG=full cargo run --release
 ```
 
 你会在日志中看到 Fusion 层的内部决策：
@@ -37,7 +37,7 @@ RUST_LOG=burn_fusion=trace cargo run --release
 如果需要同时观察 CubeCL 层的 buffer 分配和 kernel launch，加 `cubecl_wgpu::runtime=trace`：
 
 ```bash
-RUST_LOG=burn_fusion=trace,cubecl_wgpu::runtime=trace cargo run --release
+BURN_FUSION_LOG=full RUST_LOG=cubecl_wgpu::runtime=trace cargo run --release
 ```
 
 **本章聚焦第一条链路**——从 `from_data` 到 Fusion 入队；第二条链路（CubeCL 内存分配）在本章后半讲。

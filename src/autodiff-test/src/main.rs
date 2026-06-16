@@ -7,7 +7,7 @@
 //!
 //! ```bash
 //! cd src/autodiff-test
-//! RUST_LOG=burn_fusion=trace cargo run --release
+//! BURN_FUSION_LOG=full cargo run --release
 //! ```
 //!
 //! ## 预期输出

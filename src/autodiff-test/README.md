@@ -9,7 +9,7 @@ cd src/autodiff-test
 cargo test -- --nocapture
 
 # 同时观察融合日志（autodiff 触发的前向 fusion）
-RUST_LOG=burn_fusion=trace cargo run --release
+BURN_FUSION_LOG=full cargo run --release
 ```
 
 ## 测试内容
@@ -24,7 +24,7 @@ RUST_LOG=burn_fusion=trace cargo run --release
 
 3. **`x.grad(&grads)`** — 从 `Gradients` 容器中按 `NodeId` 查找 `x` 的梯度。如果 x 没有 require_grad 或 backward 未覆盖到此节点，返回 `None`。
 
-4. **前向执行时机** — backward 会触发前向 drain——`z` 的前向操作（`*2.0`、`+1.0`、`tanh`）在 `z.backward()` 时才真正在 GPU 上执行。设 `RUST_LOG=burn_fusion=trace` 可以观察到。
+4. **前向执行时机** — backward 会触发前向 drain——`z` 的前向操作（`*2.0`、`+1.0`、`tanh`）在 `z.backward()` 时才真正在 GPU 上执行。设 `BURN_FUSION_LOG=full` 可以观察到。
 
 ## 理解要点
 

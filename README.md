@@ -60,7 +60,7 @@ cd src && cargo check -p burn-test -p ch1-gelu-variants
 ### 3. Fusion：为什么需要、怎么排队、如何竞标
 **[Fusion](docs/burn/kernel-fusion-system-design.md)** — kernel launch 开销→融合收益，OperationQueue 的 dual IR，惰性执行与触发点。读到 §惰性执行末尾：
 
-> ▶ **动手**：`cd src/burn-test && RUST_LOG=burn_fusion=trace cargo run --release`
+> ▶ **动手**：`cd src/burn-test && BURN_FUSION_LOG=full cargo run --release`
 > 首次编译需数分钟（burn 全链依赖）。观察 [练习 README](src/burn-test/README.md) 中列出的四条日志特征。
 
 继续读 §OperationFuser 竞标、Block 划分、GPU 内存管理（Page/Slice 三池模型）。
@@ -127,7 +127,7 @@ cd src && cargo check -p burn-test -p ch1-gelu-variants
 
 | 步骤 | 练习 | 命令 |
 |------|------|------|
-| 3. Fusion | `src/burn-test` | `RUST_LOG=burn_fusion=trace cargo run --release` |
+| 3. Fusion | `src/burn-test` | `BURN_FUSION_LOG=full cargo run --release` |
 | 4. JIT（先） | `src/ch1-gelu-variants` | `cargo test -- --nocapture` |
 | 4. JIT（后） | `src/ch2-expand-study` | `cargo test -- --nocapture` |
 | 7. Autodiff | `src/autodiff-test` | `cargo test -- --nocapture` |
