@@ -392,6 +392,12 @@ builder.build(self.settings.clone())  // → KernelDefinition（仍是 IR 级描
 
 ---
 
+> **回头看一眼**：你用同一份 `gelu_array` 源码，在三种 runtime 上跑出了相同结果。拆开看：三套完全不同的编译路径——MLIR→LLVM SIMD（CPU）、NVRTC→PTX（CUDA）、WGSL→Metal/SPIR-V（wgpu）——输入同一份 Rust 源码，输出同一个计算结果。PyTorch 生态里没有直接对应物：CUDA kernel 跑不到 TPU，XLA kernel 跑不到 Metal。这不是说 CubeCL 比 PyTorch/Triton "更好"——不同工具为不同场景设计——而是说它解决了一个特定的部署问题：**当你需要同一套 kernel 逻辑跑在手机、笔记本、边缘盒子和服务器 GPU 上时，不需要为每个平台维护一套平台相关的实现。**
+>
+> 接下来的章节展开这个能力的内部机制。
+
+---
+
 ## 系列导航
 
 | 篇 | 文档 |

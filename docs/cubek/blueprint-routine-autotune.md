@@ -93,6 +93,36 @@ pub trait BatchMatmulRoutine<RC: RuntimeConfig>: Routine<RC, Blueprint: Blueprin
 
 **Routine 探测了连续空间，但输出离散的 Blueprint**。"试试 16×16×16 行不行"是一个二元判定——可行就选它，不行就试下一个——不是"把所有可能的 tile 大小都生成一份 Blueprint"。
 
+#### 一个边界案例：当 row_count 退化为 0
+
+`infer_blueprint_plane` 中的 row_count 计算公式值得单独看——它暴露了 Routine 层实际面临的硬件约束：
+
+```rust
+let row_count = max_plane_per_cube / (tile_factor * precision_factor);
+```
+
+`max_plane_per_cube` 是硬件限制（`max_units_per_cube / plane_dim`）。`tile_factor` 随 tile_n 增大（最小 `tile_n / 4`，但 M 或 N 很小时固定为 8）。`precision_factor` 在 f32/f64 时加倍（寄存器压力）。
+
+当 `plane_dim` 较大（如 8）、tile size 较大（如 16×16×16）、且数据类型为 f64 时：
+```
+max_plane_per_cube = 256 / 8 = 32
+tile_factor = 16 / 4 = 4
+precision_factor = 2（f64）
+row_count = 32 / (4 × 2) = 4  ← 可以
+```
+
+但当 `plane_dim = 256`（极端多 plane 配置）、tile_n = 32、f64：
+```
+max_plane_per_cube = 256 / 256 = 1
+tile_factor = 8（小 M 或 N 触发）
+precision_factor = 2
+row_count = 1 / (8 × 2) = 0  ← 退化为 0
+```
+
+`row_count == 0` 不会静默通过——`infer_blueprint_plane` 在 line 98-102 做显式检查，返回 `MatmulSetupError::Unavailable(PlaneDimUnsupported)`。错误向上传播到 `Strategy::Auto` 的级联回退逻辑：CMMA 不可用 → 回退到 Register → Register 也不需要 plane 维度 → 最终找到可执行的路径。
+
+这个极端情况说明了 Routine 层的一个设计特征：**它在 Blueprint 生成阶段就暴露不可行配置，而非等到 JIT 编译或 GPU launch 时失败**。如果 row_count 不做检查直接生成 `stage_size_m = 0` 的 `TilingScheme`，会传播到 `BatchMatmulBlueprint::cube_launch_info` 中触发除零 panic——这是 commit `f637fac` 修复的一个真实 bug（rf-detr 模型在 `m=1024, n=4, k=256` 的 matmul 上崩溃，因为 `select_size` 在 `plane_count=1` 时返回了 `stage_size_m=0`）。
+
 ### 第 3 层：Autotuner —— 有限候选间选最快
 
 前两层保证了到达 Autotuner 的 **Blueprint 候选数在可控范围内**。CubeK 的 `Strategy` 枚举（`strategy/strategy.rs:79`）有 41 个变体，覆盖了 5 种 TileMatmulKind × 多种加载策略的组合，并扩展了 VecMat、GEMV、GEMM、CpuGemm 等专用路径。通过 `BlueprintStrategy` 的分层，实际 benchmark 的候选数远小于 41：

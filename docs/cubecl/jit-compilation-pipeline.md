@@ -13,6 +13,23 @@ GPU 编程的传统方式：用 CUDA C++ 写 kernel → nvcc 编译 → 加载 P
 
 这篇文章展开每一步的系统设计。
 
+### 为什么分两段：comptime + launch-time
+
+CubeCL 把编译拆成两段——comptime（crate 编译期）和 launch-time（首次 GPU 调用时）——这不是偶然的。和 Triton 的单段 JIT 对比能看清这个设计的约束来源：
+
+**Triton 的路**：Python 函数 → Triton IR → LLVM IR → PTX。整个编译链路在运行时一次性走完。优点是用户在 Jupyter 里改一行 Python 就能重编译 kernel，迭代极快。代价是首次调用延迟——复杂 kernel 的编译加 autotune 可达 100-500ms。
+
+**CubeCL 的路**：`#[cube]` 宏展开（comptime，`cargo build` 时）→ `expand()` 生成 cubecl_ir（comptime）→ IR 优化（comptime）→ GPU 代码生成（launch-time，首次调用时，~10-50ms）→ GPU 驱动编译 + 缓存（launch-time）。
+
+两段分离的后果：
+
+- **comptime 阶段在 Rust 编译器眼皮底下完成**。宏展开错误、类型不匹配、IR 生成错误——这些在 `cargo check` 时就能发现，不需要等到 GPU 运行时。Triton 的 Python 宏在运行时才展开，kernel 语法错误只能在首次 launch 时暴露。
+- **launch-time 只做平台相关的代码生成和 GPU 编译**。这部分无法在 comptime 完成——不知道目标 GPU 是 A100 还是 M2，不知道驱动版本。但工作量已大幅缩减：IR 已优化完毕，只需做目标代码翻译。
+- **首次调用延迟比 Triton 低一个数量级**（~10-50ms vs ~100-500ms），因为 comptime 承担了大部分编译工作。这对生产部署有意义——用户不会因为冷启动等半秒。
+- **代价是开发迭代比 Triton 慢**。改一行 kernel 代码需要 `cargo build`（秒级），而不是 Jupyter cell 重跑（毫秒级）。在探索阶段，Triton 的体验更流畅。
+
+选择两段分离不是因为"这样更好"——是因为 CubeCL 的目标场景（生产部署、多平台 AOT）和 Triton 的目标场景（研究探索、单平台 JIT）有根本不同的约束。
+
 ---
 
 ## 第一步：`#[cube]` 过程宏 —— 从 Rust 到 IR
