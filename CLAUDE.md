@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 本仓库是 [Tracel](https://github.com/tracel-ai) 开源生态的系统设计分析文档，覆盖 Burn（Rust DL 框架）、CubeCL（多平台 GPU 编译器）、CubeK（高性能算子库）、Burn-ONNX（AOT 模型导入）。文档以系统设计分析为主（从代码中提取设计决策、权衡和机制链路），章节教程为辅（逐步 walkthrough 源码机制）。
 
+**目标读者**：系统软件 / Rust 后端工程师，对 NN 只有初步概念、用过基础 PyTorch，想借 Burn 学习通用 AI infra/sys。写作时补领域语义（NN 算子、backprop）与对比基线（PyTorch/Triton/XLA/CUTLASS），不假设读者有 ML 框架内部经验；领域与基线背景集中在 [docs/primer.md](docs/primer.md)，可迁移映射在 [docs/concept-index.md](docs/concept-index.md)。
+
 核心产出是五篇系统设计文章，覆盖 Burn/CubeCL 技术栈的四个核心系统：Kernel Fusion、Autotune、JIT 编译管线、Autodiff，以及一篇全链路全景文章。
 
 ## 架构

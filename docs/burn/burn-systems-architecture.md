@@ -4,6 +4,13 @@
 >
 > **阅读建议**：如果初次接触，先浏览 §1–§2（架构图和 Tensor 定义），然后按路径顺序读各系统文章（Fusion → JIT → Autotune → CubeK → Autodiff），读完后再回来重读全链路时序图和全景回顾。如果你想先看到全貌再深入细节，继续往下。
 
+> **导读** · 难度：中等（初次先浏览 §1–§2） · 预计 ~30 分钟浏览 · [学习地图](../../README.md#学习地图) 阶段 2
+>
+> - **读前应知道**：[architecture.md](../architecture.md) 的分层；一个训练步与 backprop 的最小语义（见 [primer · Part A](../primer.md#part-a--领域最小集)）。初次阅读把 `z.backward()` 当黑盒——primer 给最小解释，[Autodiff 篇](autodiff-system-design.md) 展开。
+> - **AI infra 通用映射**：一行代码到 GPU 执行的全链路，对应任何 DL 框架都有的"前向调度 + 编译 + 执行 + 反向"流水线。
+> - **本篇回答**：一行 `Tensor` 代码触发后经过哪几层、每层做了什么；Fusion / Autotune / JIT / Autodiff 如何在一条链路上串联
+> - **配套练习**：[src/burn-test](../../src/burn-test/)（跑一遍建立融合直觉，见 [最快上手](../../README.md#最快上手约-30-分钟)）
+
 本文用一行代码贯穿全程：
 
 ```rust
@@ -890,6 +897,18 @@ let grad_x = x.grad();
 | 检查点策略 | `burn/crates/burn-autodiff/src/checkpoint/strategy.rs` |
 | 类型状态 Builder | `burn/crates/burn-autodiff/src/ops/base.rs` |
 | 分布式同步 | `burn/crates/burn-autodiff/src/distributed.rs` |
+
+---
+
+## 本篇小结
+
+读完你现在能回答：
+
+- 一行 `z = (x*2.0+1.0).tanh(); z.backward()` 从 Rust 源码到 GPU 执行、再到梯度计算，依次经过哪些系统
+- 每个系统在这条链路上承担什么职责，以及它们之间的交接点
+- 为什么这是一篇"地图"——细节在后续各系统文章展开，读完它们后回来重读全链路时序图
+
+> ✓ **完成自检**：能在脑子里画出一张图——"一行代码触发后，经过哪几层、每层做了什么"。
 
 ---
 

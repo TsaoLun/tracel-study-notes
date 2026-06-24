@@ -2,6 +2,13 @@
 
 > `#[cube]` 过程宏将 Rust 函数展开为 IR 操作 → 嵌套 Scope 树做定点优化 → WGSL/SPIR-V/MSL 三后端生成代码。与 Triton 的运行时 JIT 不同，CubeCL 的 comptime 特化在 Rust crate 编译期完成，GPU 编译在首次 launch 时触发并缓存。
 
+> **导读** · 难度：中等偏难 · 预计 ~90 分钟 + 两个练习 · [学习地图](../../README.md#学习地图) 阶段 4
+>
+> - **读前应知道**：GPU 执行模型；Rust proc-macro 不需要预先掌握，文章逐步解释 `#[cube]`
+> - **AI infra 通用映射**：把 kernel 源码编译成多平台 GPU 二进制是通用问题，对比 Triton 的 JIT→PTX 与 XLA 的 HLO→PTX（基线见 [primer · Part B](../primer.md#part-b--对比基线速查)）。
+> - **本篇回答**：(1) `#[cube]` 如何在编译期展开成 IR；(2) IR 如何做定点优化；(3) 如何翻译为多平台 shader 并 dispatch 到 GPU
+> - **配套练习**：[src/ch1-gelu-variants](../../src/ch1-gelu-variants/)（先，写 kernel 变体）、[src/ch2-expand-study](../../src/ch2-expand-study/)（后，看宏展开）
+
 ## 问题：什么构成了一个 GPU 编译器
 
 GPU 编程的传统方式：用 CUDA C++ 写 kernel → nvcc 编译 → 加载 PTX → 启动。但 CubeCL 的目标是将 **Rust 函数直接变成 GPU 可执行代码**，且同时支持 CUDA、Metal、Vulkan、WebGPU。这需要一套完整的编译管线：
@@ -338,6 +345,18 @@ Cache path: {root}/spirv_{vendor}_{device}/{version}/{key_hash}
 - Pipeline 创建与缓存：`cubecl/crates/cubecl-wgpu/src/compute/server.rs`
 - GPU dispatch：`cubecl/crates/cubecl-wgpu/src/compute/stream.rs`
 - KernelId：`cubecl/crates/cubecl-runtime/src/id.rs`
+
+---
+
+## 本篇小结
+
+读完你现在能回答：
+
+- `#[cube]` 宏在 Rust crate 编译期做了什么，生成的 IR 是嵌套 Scope 树而非平铺基本块
+- IR 优化做哪些定点变换，GPU 编译为什么推迟到首次 launch 并按 `KernelId` 缓存
+- 同一份 kernel 逻辑如何分别落到 WGSL / SPIR-V / MSL
+
+> ✓ **完成自检**：能解释 `a + b` 在 `#[cube]` 函数中经历了什么——从 Rust 表达式到 IR 操作到 GPU 指令。
 
 ---
 

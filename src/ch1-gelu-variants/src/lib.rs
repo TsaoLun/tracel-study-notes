@@ -1,8 +1,8 @@
 //! CubeCL 专题 · 第一章作业：GELU 变体跟练
 //!
-//! 对应文档：../../blog-cubecl-1.md
+//! 对应文档：../../../docs/cubecl/1-gelu-launch.md
 //!
-//! 运行方式（在 homework/ch1-gelu-variants/ 下）：
+//! 运行方式（在 src/ch1-gelu-variants/ 下）：
 //!   cargo test -- --nocapture
 //!
 //! 前置条件：项目根目录下已 clone cubecl 仓库（../../cubecl/）

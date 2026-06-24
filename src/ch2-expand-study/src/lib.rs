@@ -1,8 +1,8 @@
 //! CubeCL 专题 · 第二章作业：expand 机制
 //!
-//! 对应文档：../../blog-cubecl-2.md
+//! 对应文档：../../../docs/cubecl/2-expand.md
 //!
-//! 运行方式（在 homework/ch2-expand-study/ 下）：
+//! 运行方式（在 src/ch2-expand-study/ 下）：
 //!   cargo test -- --nocapture
 //!
 //! 前置条件：项目根目录下已 clone cubecl 仓库（../../cubecl/）

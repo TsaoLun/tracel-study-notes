@@ -1,6 +1,13 @@
 # CubeCL 的 Autotune 系统：策略枚举、优先级剪枝与量化缓存
 
-> CUBCL 不搜索参数网格——它让 kernel 作者枚举已验证的策略，在首次执行时 benchmark 选出最快者并缓存。与 Triton 的 exhaustive grid search 不同，它用人力换候选最少化，用优先级剪枝换早停。
+> CubeCL 不搜索参数网格——它让 kernel 作者枚举已验证的策略，在首次执行时 benchmark 选出最快者并缓存。与 Triton 的 exhaustive grid search 不同，它用人力换候选最少化，用优先级剪枝换早停。
+
+> **导读** · 难度：中等 · 预计 ~40 分钟 · [学习地图](../../README.md#学习地图) 阶段 5
+>
+> - **读前应知道**：JIT 篇的 `KernelId` 与编译缓存；matmul 的 tile 概念、为什么 batch/shape 影响选哪个 kernel（见 [primer · Part A](../primer.md#part-a--领域最小集)）
+> - **AI infra 通用映射**：为具体 shape/硬件选最快 kernel 是通用问题，对比 Triton 的参数网格穷举（基线见 [primer · Part B](../primer.md#part-b--对比基线速查)）。
+> - **本篇回答**：(1) 为什么同一 op 的不同 shape 需要不同 kernel；(2) 如何控制候选数量与首次执行延迟；(3) 缓存 key 如何用 anchor 量化设计
+> - **配套练习**：无（建议读完后回看 ch1 的向量化变体，体会"候选"从何而来）
 
 ## 为什么需要 Autotune
 
@@ -269,6 +276,18 @@ pub struct TuneInput<'a, R, O> {
 - GPU 时间戳（Metal）：`cubecl/crates/cubecl-wgpu/src/compute/timings.rs`
 - Matmul 30+ 候选策略：`burn/crates/burn-cubecl/src/kernel/matmul/tune/base.rs`
 - Fusion 场景 autotune：`burn/crates/burn-cubecl-fusion/src/tune.rs`
+
+---
+
+## 本篇小结
+
+读完你现在能回答：
+
+- 为什么不存在一套在所有 shape/dtype/hardware 上最优的 kernel 参数
+- CubeCL 用策略枚举 + 优先级剪枝把候选数压到个位到几十量级，与 Triton 的参数网格的差异
+- anchor 量化如何减少缓存条目，以及它牺牲了什么精度
+
+> ✓ **完成自检**：能对比 CubeCL 和 Triton 的 autotune 在"搜索空间定义"和"缓存 key 设计"上的根本差异。
 
 ---
 

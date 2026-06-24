@@ -3,8 +3,8 @@
 ## 读前须知
 
 - **Burn ONNX 是什么**：在 `build.rs` 里运行的 AOT 编译器——把 ONNX 图翻译为可调试的 Rust 源码（`model.rs`）与权重（`model.bpk`），运行时二进制不依赖 ONNX Runtime。
-- **本文覆盖**：IR 流水线（6 阶段）、注意力融合（hero pass）、分区编译、三层测试体系。Burn 类型栈与融合流见 [综合地图](summary.md)，GPU JIT 见 [CubeCL 篇](../cubecl/summary.md)。
-- **统计基准**：测试数字来自 `burn-onnx` 仓库 `crates/onnx-official-tests/expectations.toml`（ONNX v1.19.0，1615 条），复验命令见 [README](README.md#源码版本与数字校验)。
+- **本文覆盖**：IR 流水线（6 阶段）、注意力融合（hero pass）、分区编译、三层测试体系。Burn 类型栈见 [架构分析](../architecture.md)，GPU JIT 见 [CubeCL 导航](../cubecl/summary.md)。
+- **统计基准**：测试数字来自 `burn-onnx` 仓库 `crates/onnx-official-tests/expectations.toml`（ONNX v1.19.0，1615 条），版本基准与复验清单见 [SOURCE-VERSION](../SOURCE-VERSION.md)。
 
 系列分工与导航见 [README](../../README.md)。
 

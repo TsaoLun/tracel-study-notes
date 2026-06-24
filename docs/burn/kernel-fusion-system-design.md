@@ -2,6 +2,13 @@
 
 > Burn 不立即执行操作——而是排队、在同步点触发融合优化、缓存方案。与 XLA 的静态融合和 Triton 的 JIT 融合不同，它选择了惰性队列 + 探索缓存的中间路线。本文展开这个选择的设计权衡。
 
+> **导读** · 难度：中等 · 预计 ~60 分钟（含练习） · [学习地图](../../README.md#学习地图) 阶段 3
+>
+> - **读前应知道**：kernel launch overhead 的数量级、GPU 内存层次（见 [第 0 步前置自检](../../README.md#第-0-步前置自检)）；为什么 element-wise 算子在 NN 里又多又碎（见 [primer · Part A](../primer.md#part-a--领域最小集)）
+> - **AI infra 通用映射**：算子融合是通用问题，对比 XLA 的编译期 fusion pass 与 PyTorch `torch.compile`（基线见 [primer · Part B](../primer.md#part-b--对比基线速查)）。
+> - **本篇回答**：(1) 为什么连续的 element-wise op 要融成一个 kernel；(2) 惰性队列在什么时机触发执行；(3) OperationFuser 如何竞标、内存如何用 Page/Slice 三池管理
+> - **配套练习**：[src/burn-test](../../src/burn-test/) — `BURN_FUSION_LOG=full` 观察四个 op 融成一个 kernel
+
 ## 为什么需要 Kernel Fusion
 
 一个 ML 框架的推理/训练是一系列 GPU kernel 的执行。每个 kernel 完成一小段计算：矩阵乘法、逐元素加法、激活函数等。**kernel launch 有可测量的时间开销**。
@@ -272,6 +279,18 @@ Burn 的路线适合**动态计算图 + 高重复性的计算模式**（比如 L
 - CubeCL 融合实现：`burn/crates/burn-cubecl-fusion/src/`
 - 内存管理：`cubecl/crates/cubecl-runtime/src/memory_management/`
 - CubeCL 运行时：`cubecl/crates/cubecl-wgpu/src/compute/`
+
+---
+
+## 本篇小结
+
+读完你现在能回答：
+
+- 为什么把 `*2.0`、`+1.0`、`tanh` 三个 op 融成一个 kernel 能省下 launch 开销
+- 惰性队列推迟了什么、在哪个时机（drain）触发探索与执行
+- OperationFuser 竞标和 ExecutionPlanStore 缓存如何让"探索一次、复用多次"
+
+> ✓ **完成自检**：跑 [src/burn-test](../../src/burn-test/) 看到 `[plan] exploration completed` 或 `[plan] cache hit`；第二次运行时观察到缓存命中。
 
 ---
 

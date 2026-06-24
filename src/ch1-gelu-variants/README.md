@@ -1,6 +1,8 @@
-# ch1-gelu-variants: 写 GELU kernel 三种变体
+# ch1-gelu-variants: GELU kernel 的向量化与 comptime 变体
 
-验证 [JIT 编译管线](../../docs/cubecl/jit-compilation-pipeline.md) 中描述的 `#[cube]` 宏和 kernel launch。
+跟练 [JIT 编译管线](../../docs/cubecl/jit-compilation-pipeline.md) 中描述的 `#[cube]` 宏和 kernel launch，对应章节教程 [1-gelu-launch.md](../../docs/cubecl/1-gelu-launch.md)。
+
+> **对应的 NN 概念**：GELU 是一个激活函数，属于 element-wise（逐元素）算子——见 [primer · 算子三类](../../docs/primer.md#part-a--领域最小集)。这个练习是"一个具体 element-wise 算子在 GPU 上怎么落地"的样本。
 
 ## 运行
 
@@ -9,25 +11,39 @@ cd src/ch1-gelu-variants
 cargo test -- --nocapture
 ```
 
+> 在 CPU runtime（`cubecl::cpu::CpuRuntime`）上跑，无需 GPU。首次编译需要本地已 clone `cubecl`（见根目录 [README](../../README.md#setup首次使用)）。
+
 ## 三个测试
 
-| 测试 | 函数 | 向量化 | CubeDim |
-|------|------|--------|---------|
-| `test_scalar` | `launch_scalar` | 标量（1 元素/work item） | (32,1,1) — 32 threads |
-| `test_vector2` | `launch_vector2` | vec2（2 元素/work item） | (16,1,1) — 16 threads, 每个处理 2 元素 |
-| `test_vector4` | `launch_vector4` | vec4（4 元素/work item） | (8,1,1) — 8 threads, 每个处理 4 元素 |
+所有变体共用同一个 kernel `gelu_array<F, N>`（调用 `gelu_scalar`），通过类型参数 `N`（向量宽度）和 `#[comptime]` 参数改变行为。
 
-三种变体计算完全相同的 GELU 函数，产生相同输出，但使用不同的并行度。
+| 测试 | 作业 | 观察点 |
+|------|------|--------|
+| `homework_1_vector_sizes` | 向量化宽度 vs CubeDim | `launch_vector1`（`vector_size=1` → `CubeDim::new_1d(8)`）与 `launch_vector4`（`vector_size=4` → `CubeDim::new_1d(2)`）算同一份 GELU，输出数值相同、线程数不同 |
+| `homework_2_comptime_constant` | `comptime!` 常量 vs `#[comptime]` 参数 | `gelu_array_scaled`（函数体内 `comptime!` 常量，不改 launch 签名）对比 `gelu_array_comptime_param`（多一个 `#[comptime] bool` 参数，进入 `KernelId` / JIT 缓存键） |
+| `homework_2_comparison` | 对比总结 | 打印两种 comptime 用法在"签名 / 缓存键 / 适用场景"上的差异表 |
 
-## 观察点
+## 预期输出
 
-1. `#[cube(launch)]` 宏做了什么——打开 `lib.rs`，看 `gelu_scalar`、`gelu_vector2`、`gelu_vector4` 三个函数。它们用完全相同的 Rust 代码描述 GELU，仅靠类型参数（`f32`、`vectorization::Float2`、`vectorization::Float4`）改变并行度。
+`cargo test -- --nocapture` 通过时，3 个测试全部 `ok`，stdout 含类似：
 
-2. `CubeDim` 的调整——标量用 (32,1,1)，vec4 用 (8,1,1)。因为 vec4 每个 work item 处理 4 个元素，只需 1/4 的线程数。
+```
+=== 作业 1：vector_size 与 CubeDim ===
+vector_size=1 → CubeDim::new_1d(8), output=[...]
+vector_size=4 → CubeDim::new_1d(2), output=[...]
+验证：两次输出的数值应一致（GELU 结果相同），但 CubeDim 不同。
+...
+=== 作业 2A：comptime! 常量 ===
+=== 作业 2B：#[comptime] bool 参数 ===
+=== 作业 2 对比总结 ===
+```
 
-3. 测试用相同的输入验证三个变体产生相同的输出。这验证了不同向量化宽度只是实现细节，不改变计算结果。
+## 验证点
+
+- `homework_1_vector_sizes` 两次打印的 `output=` 数值应逐元素一致——向量化宽度只改并行度，不改计算结果。
+- `homework_2_comptime_constant` 中，2A 的 launch 签名与原始 `gelu_array` 相同，2B 多传一个 `scaled` 参数。这对应文档里"`#[comptime]` 参数进 JIT 缓存键"的论点。
 
 ## 理解要点
 
-- 同一个 `#[cube]` 函数可以通过类型参数生成不同向量化宽度的 kernel。这是 CubeCL "comptime 特化" 的基础——不同的类型参数对应不同的 monomorphized 实例。
-- 运行 `cargo expand`（需要 `cargo install cargo-expand`）可以看到 `#[cube]` 宏展开后的完整代码。
+- 同一个 `#[cube]` 函数可以通过类型参数 `N: Size` 生成不同向量化宽度的 kernel——不同的类型参数对应不同的 monomorphized 实例。
+- 运行 `cargo expand --lib`（需要 `cargo install cargo-expand`）可以看到 `#[cube]` 宏展开后的完整代码。下一个练习 [ch2-expand-study](../ch2-expand-study/) 专门观察这一步。

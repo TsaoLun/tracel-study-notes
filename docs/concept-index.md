@@ -86,6 +86,20 @@
 | Tracel vs PyTorch/XLA | [architecture](architecture.md) | 与 PyTorch/XLA 的架构对比 |
 | 各层决策时机 | [architecture](architecture.md) | 各层决策时机 |
 
+## 可迁移映射
+
+把 Burn / CubeCL 的机制对应到通用 AI infra 概念与其他框架——换框架后认知可迁移。各基线一段话解释见 [primer · Part B](primer.md#part-b--对比基线速查)。
+
+| Burn / CubeCL 机制 | 通用 AI infra 概念 | 其他框架的对应 |
+|--------------------|--------------------|----------------|
+| OperationQueue 惰性入队 + drain 探索融合 | 算子融合 (operator fusion) | XLA fusion pass（编译期规则）、PyTorch `torch.compile`/Inductor（trace 后融合） |
+| `KernelId` 哈希 + Pipeline 缓存 | kernel 编译与缓存 | Triton JIT→PTX、XLA HLO→PTX/Metal（AOT） |
+| 策略枚举 + 优先级剪枝 + anchor 量化缓存 | autotune / kernel 选择 | Triton autotune 参数网格、cuDNN heuristics |
+| Blueprint 限制编译 key 维度 + Routine 离散化 | 防 kernel 组合爆炸 | CUTLASS 模板特化、TVM / Ansor 搜索空间约束 |
+| `Autodiff<B>` 装饰器 + 类型状态图构建 | 自动微分的架构位置 | PyTorch `grad_fn`（嵌入 tensor）、JAX `grad`（函数变换） |
+| Device 路由 + Backend 类型栈单态化 | 后端抽象 / 算子分发 | PyTorch Dispatcher 多级 key、XLA 编译目标后端 |
+| `#[comptime]` 进 JIT key | 编译期特化 / 形状专化 | Triton `tl.constexpr`、XLA shape 专化 |
+
 ---
 
-→ [阅读理解路径](../README.md#阅读路径) · [所有文章导航](../README.md)
+→ [阅读理解路径](../README.md#阅读路径) · [所有文章导航](../README.md) · [领域与基线速查](primer.md)

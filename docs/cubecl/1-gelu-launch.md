@@ -3,7 +3,7 @@
 > **本章锚点**：CubeCL 仓库里的官方示例 `cubecl/examples/gelu/`。  
 > **GELU** 是逐元素的激活函数；**`gelu_array`** 是示例里 kernel 的函数名（不是 Burn 里的模块名）。你写的 `gelu_array` 看起来像普通 Rust，但它使用 CubeCL 前端类型（`Vector`、`ABSOLUTE_POS`），**不能**在 `main` 里直接调用。Host 侧应调用宏生成的 **`gelu_array::launch_unchecked`**；设备代码在**首次 launch** 时才 JIT 编译。
 
-> **读者提示**：*kernel* / *JIT* 等见 [summary 读前须知](summary.md#读前须知) 与 [词汇表](summary.md#词汇说明表)。专题目录见 [index.md](index.md#入门引导gpu--cubecl-新人必读)。
+> **读者提示**：*kernel* / *JIT* 等术语见 [JIT 编译管线](jit-compilation-pipeline.md)。专题写作计划见 [index.md](index.md#入门引导gpu--cubecl-新人必读)（已归档）。
 
 ---
 
@@ -379,7 +379,7 @@ builder.build(self.settings.clone())  // → KernelDefinition（仍是 IR 级描
 
 ## 作业
 
-> 可运行骨架见 [src/ch1-gelu-variants/src/lib.rs](src/ch1-gelu-variants/src/lib.rs)。`cd src/ch1-gelu-variants && cargo test -- --nocapture` 即可运行。
+> 可运行骨架见 [src/ch1-gelu-variants/src/lib.rs](../../src/ch1-gelu-variants/src/lib.rs)。`cd src/ch1-gelu-variants && cargo test -- --nocapture` 即可运行。
 
 1. `input` 改为 8 个元素，分别设 `vector_size = 1` 与 `4`，推导 `CubeDim::new_1d(...)`，用 `--features cpu` 验证。
 2. 在 `gelu_scalar` 里加 `comptime!` 常量，观察无需改 launch 签名即可重跑；对比「增加 `#[comptime] bool` launch 参数」对缓存键的影响（预告第四章）。

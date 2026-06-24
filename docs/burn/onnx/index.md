@@ -156,6 +156,6 @@ cargo test -p onnx-ir --test
 | ONNX 地图 | [../onnx-summary.md](../onnx-summary.md) | 已发布 |
 | Fusion 计划 | [../fusion/index.md](../fusion/index.md) | 已发布 |
 | **ONNX 计划** | **本文** | 新发布 |
-| Autodiff 地图 | [../autodiff/summary.md](../autodiff/summary.md)（待写） | — |
+| Autodiff 地图 | [../autodiff/summary.md](../autodiff/summary.md) | 已发布 |
 
 *Burn 底层机制 · ONNX 专题 · [系列索引](../../../README.md)*

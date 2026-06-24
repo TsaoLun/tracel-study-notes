@@ -26,7 +26,7 @@
 
 ### 建议阅读顺序
 
-1. 可选：扫一眼 [summary 词汇表 · 核心概念](summary.md#核心概念本篇最重要)（5 分钟）。
+1. 可选：扫一眼 [JIT 编译管线](jit-compilation-pipeline.md) 的导读（5 分钟）。
 2. **第一章**：跟跑 `cargo run --example gelu --features cpu`（无 GPU 也可）。
 3. 并行参考：[cubecl-book · Installation + Simple Reduction](cubecl/cubecl-book/src/getting-started/summary.md)（练手写 reduction，与本专题互补）。
 4. 需要全貌时再读 [summary.md](summary.md)。
@@ -35,7 +35,7 @@
 
 | 材料 | 角色 |
 |------|------|
-| [summary.md](summary.md) | **地图**：文首 [读前须知](summary.md#读前须知) + 机制全览 + 文末术语表 |
+| [summary.md](summary.md) | **导航**：系统设计文章 + 章节教程入口 |
 | [cubecl-book](cubecl/cubecl-book/src/SUMMARY.md) | **练手写 kernel**（reduction 渐进教程） |
 | **本专题** | **对照源码走编译器路径**（launch → expand → opt → 后端） |
 
@@ -54,7 +54,7 @@
 2. **每章一个主示例**，源码路径写全（相对 `cubecl/` 仓库根）。
 3. **正文先可运行、再钉源码**；编译器深度逐章加码。
 4. **章末**：小结 + 作业 + 下章预告。
-5. **完整术语表**仍以 [summary 文末](summary.md#词汇说明表) 为准；各章只引入本章最少新词。
+5. **术语**以 [JIT 编译管线](jit-compilation-pipeline.md) 为准；各章只引入本章最少新词。
 
 ---
 

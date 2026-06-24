@@ -2,6 +2,8 @@
 
 验证 [Autodiff 系统设计](../../docs/burn/autodiff-system-design.md) 中描述的梯度图构建和反向传播。
 
+> **对应的 NN 概念**：`z.backward()` 就是 backprop——前向构图、反向按链式法则逐元素算梯度。训练需要梯度、推理不需要，背景见 [primer · backprop 算什么](../../docs/primer.md#part-a--领域最小集)。
+
 ## 运行
 
 ```bash
@@ -14,7 +16,25 @@ BURN_FUSION_LOG=full cargo run --release
 
 ## 测试内容
 
-`autodiff_gradient_matches_manual` — 对 `z = tanh(x*2.0+1.0)` 手动计算 `∂z/∂x = (1 - tanh²(2x+1)) × 2`，与 Burn 的 autodiff 结果逐元素对比。x = [[2,3],[4,5]]。
+`autodiff_gradient_matches_manual` — 对 `z = tanh(x*2.0+1.0)` 手动计算 `∂z/∂x = (1 - tanh²(2x+1)) × 2`，与 Burn 的 autodiff 结果逐元素对比（容差 1e-5）。x = [[2,3],[4,5]]。
+
+## 预期输出
+
+`cargo test -- --nocapture` 通过时测试 `ok`。`cargo run --release` 打印：
+
+```
+前向输出 z:
+[[0.9999..., 0.99999...], [0.99999..., 0.99999...]]   ≈ tanh([[5,7],[9,11]])
+梯度 ∂z/∂x:
+[[0.0002..., 0.0000...], [0.0000..., 0.0000...]]       ≈ (1 - tanh²) × 2
+```
+
+梯度接近 0 是因为 `2x+1 ∈ [5,11]` 落在 tanh 的饱和区，`1 - tanh² ≈ 0`。
+
+## 验证点
+
+- 测试通过 → Burn 的反向传播结果与链式法则手算一致。
+- 前向输出全部接近 1.0、梯度全部接近 0.0，与 tanh 饱和区的预期吻合。
 
 ## 观察点
 

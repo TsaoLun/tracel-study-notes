@@ -13,13 +13,13 @@ CubeCL 是 Tracel 生态的多平台 GPU 编译器。本项目围绕系统设计
 
 ## 章节教程
 
-跟练教程，逐步展开源码机制：
+跟练教程，逐步展开源码机制（完整写作进度见 [ROADMAP](../ROADMAP.md)）：
 
 | 章节 | 内容 |
 |------|------|
-| [index.md](index.md) | CubeCL 8 章写作计划 |
 | [1-gelu-launch.md](1-gelu-launch.md) | GELU kernel：从 `#[cube]` 到 launch 的完整 walkthrough |
 | [2-expand.md](2-expand.md) | expand：Rust `+` 如何变成 `__expand_add_method` |
+| [index.md](index.md) | CubeCL 章节写作计划（已归档 roadmap） |
 
 ## 跨项目
 
@@ -27,4 +27,4 @@ CubeCL 是 Tracel 生态的多平台 GPU 编译器。本项目围绕系统设计
 
 ---
 
-→ 推荐入口：[全景点](../burn/burn-systems-architecture.md) · [所有文章导航](../../README.md)
+→ 推荐入口：[全景篇](../burn/burn-systems-architecture.md) · [所有文章导航](../../README.md)

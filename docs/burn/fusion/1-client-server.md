@@ -3,7 +3,7 @@
 > **本章锚点**：`let tensor = Tensor::<2>::from_data([[2., 3.], [4., 5.]], &device)` 这一行代码。  
 > 一次 tensor 创建穿过**两条**独立的 client-server 链路——Fusion 层和 CubeCL 层。Fusion 层把操作推迟入队；CubeCL 层立即在 GPU 上分配 buffer。两条链路通过 `DeviceServiceStage::Upstream` 排成流水线。
 
-> **读者提示**：*Fusion* / *client-server* 等见 [Burn 地图词汇表](../summary.md#词汇说明表)。专题目录见 [index.md](index.md)。
+> **读者提示**：*Fusion* / *client-server* 等术语见 [Fusion 系统设计](../kernel-fusion-system-design.md)。专题写作计划见 [index.md](index.md)（已归档）。
 
 ---
 
@@ -12,7 +12,7 @@
 | 文档 | 你得到什么 |
 |------|------------|
 | [index.md · 入门引导](index.md#入门引导burn-fusion-机制新人必读) | 主示例是什么、建议阅读顺序、跟跑方式 |
-| [../summary.md §四](../summary.md#四运行时融合流与-channel-重构v0210) | 融合流宏观全貌（10 分钟） |
+| [Fusion 系统设计](../kernel-fusion-system-design.md) | 融合流宏观全貌与设计权衡 |
 | **本章** | 看清两条 client-server 链路的结构、一次 tensor 分配穿过它们 |
 | [第二章](index.md#章节目录)（待写） | OperationQueue：操作入队但不执行的语义 |
 

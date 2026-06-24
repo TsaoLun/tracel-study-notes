@@ -1,7 +1,7 @@
 > **归档**：旧架构的章节计划。当前阅读路径见 [README](../../../README.md)，系统设计分析见 [Fusion 系统设计](../kernel-fusion-system-design.md)。已完成的第一章保留为可选延伸阅读。
 
 # Burn Fusion 专题写作计划（已归档）
-> **读计划前**：若你尚未读过 Burn 的类型栈概览，可先扫一眼 [Burn 地图 · 架构一览](../summary.md#架构一览)（5 分钟），再回到这里。
+> **读计划前**：若你尚未读过 Burn 的类型栈概览，可先扫一眼 [架构分析](../../architecture.md)（5 分钟），再回到这里。
 
 ---
 
@@ -50,11 +50,11 @@ RUST_LOG=burn_fusion=trace,cubecl_wgpu::runtime=trace cargo run --release
 | **`FuseBlockBuilder`** | 构建融合块的 builder：`ops`/`reads`/`writes`/`tensor_writes` | `burn/` · `crates/burn-cubecl-fusion/src/engine/trace/block.rs` |
 | **`elemwise_fuse`** | CubeCL kernel：用 `#[comptime]` + `#[unroll]` 展开任意 op 序列 | `burn/` · `crates/burn-cubecl-fusion/src/optim/elemwise/` |
 
-> **路径约定**：下文 `crates/…` 路径均相对各仓库根（Burn 机制在 `burn/`，CubeCL runtime 在 `cubecl/`）。机制基准版本见 [README · 源码版本](README.md#源码版本与数字校验)（Burn **v0.21.0**）。
+> **路径约定**：下文 `crates/…` 路径均相对各仓库根（Burn 机制在 `burn/`，CubeCL runtime 在 `cubecl/`）。机制基准版本见 [README · 源码版本](../../../README.md#源码版本)（Burn **v0.21.0**）。
 
 ### 建议阅读顺序
 
-1. 先读 [Burn 地图 · §四（融合流）](../summary.md#四运行时融合流与-channel-重构v0210)（10 分钟）——建立 MultiStream / drain / channel 的心智模型。
+1. 先读 [Fusion 系统设计](../kernel-fusion-system-design.md)——建立 MultiStream / drain / channel 的心智模型。
 2. **第一章**：跟跑融合示例，确认 `RUST_LOG=burn_fusion=trace` 能看到融合日志。
 3. 后续章按顺序读——每章依赖前一章的机制理解。
 
@@ -83,7 +83,7 @@ RUST_LOG=burn_fusion=trace,cubecl_wgpu::runtime=trace cargo run --release
 3. **源码路径写全**：`burn/` · `crates/burn-fusion/src/stream/multi.rs`（符号 `MultiStream::drain`），行号作近似参考。
 4. **正文先跟练、再钉源码**；从具体调用链进入，再展开机制。
 5. **章末**：小结 + 作业 + 下章预告。
-6. **完整术语表**以 [Burn 地图文末](../summary.md#词汇说明表) 为准；各章只引入本章最少新词。
+6. **术语**以 [Fusion 系统设计](../kernel-fusion-system-design.md) 为准；各章只引入本章最少新词。
 
 ---
 
@@ -100,7 +100,7 @@ RUST_LOG=burn_fusion=trace,cubecl_wgpu::runtime=trace cargo run --release
 | 7 | 7-elemwise-fuse.md | `elemwise_fuse` kernel：`#[comptime]` 展开任意 op 序列 | `elemwise_fuse` 通过 `#[comptime]` config + `#[unroll]` 在 JIT 编译期特化 op 序列，每种组合对应不同 JIT 产物 | `burn/` · `crates/burn-cubecl-fusion/src/optim/elemwise/optimization.rs`、`crates/burn-cubecl-fusion/src/engine/codegen/kernel.rs`（`elemwise_fuse` 的 `#[cube]` 定义） |
 | 8 | 8-cross-stream-channel.md | 跨流共享、不可融合处理与 v0.21.0 channel 重构 | 跨流 tensor 共享（`tag_shared_view`、`resolve_streams`）；不可融合时退化为 `ExecutionStrategy::Operations`；v0.21.0 用 worker channel 替代递归锁（`submit`/`submit_blocking`、`DeviceServiceStage::Upstream`） | `burn/` · `crates/burn-fusion/src/client.rs`（`submit`、`submit_blocking`）、`crates/burn-fusion/src/stream/multi.rs`（`resolve_streams`）、`crates/burn-fusion/src/stream/memory_checks.rs`、`crates/burn-fusion/src/stream/store/base.rs`（`ExecutionStrategy`） |
 
-> **与 [Burn 地图 §四](../summary.md#四运行时融合流与-channel-重构v0210) 的关系**：地图 §四 给出融合流的宏观全貌；本专题的 8 章逐机制追踪源码。读完地图知道"有 Policy/Explorer 这两个东西"；读完本专题能解释"Policy 为什么有三种 Action、Explorer 的 register_inner 为什么检查 tensor ID 交集"。
+> **与 [Fusion 系统设计](../kernel-fusion-system-design.md) 的关系**：系统设计文给出融合流的宏观全貌与设计权衡；本专题的 8 章逐机制追踪源码。读完地图知道"有 Policy/Explorer 这两个东西"；读完本专题能解释"Policy 为什么有三种 Action、Explorer 的 register_inner 为什么检查 tensor ID 交集"。
 
 ---
 

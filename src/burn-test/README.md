@@ -2,6 +2,8 @@
 
 验证 [Fusion 系统设计](../../docs/burn/kernel-fusion-system-design.md) 中描述的惰性排队和融合机制。
 
+> **对应的 NN 概念**：`clone → *2 → +1 → tanh` 是一串 element-wise 算子，正是 NN 里"又多又碎"的那类——所以融合有收益。背景见 [primer · 为什么 element-wise 又多又碎](../../docs/primer.md#part-a--领域最小集)。
+
 ## 运行
 
 ```bash
@@ -83,3 +85,10 @@ fusion trace (1 op, 1 block)  ← Slice kernel，未融合
 3. **`still_optimizing`**：当所有 fuser 返回 `Closed`，探索终止——`still_optimizing → false`。
 
 4. **对比简洁模式**：`BURN_FUSION_LOG=basic` 只显示 fusion trace 表（最终执行策略），无 `[fuser]`/`[explorer]` 细节。
+
+## 验证点
+
+- 看到 `[plan] exploration completed`（首次）或 `[plan] cache hit`（重复执行）即说明融合引擎正常工作。
+- fusion trace 表里出现 `▸ fused ElementWise (... 3 ops)`，三个 element-wise op 合并为一个 `elemwise_fuse` kernel。
+- 数值正确性由测试保证：`cargo test` 跑 `fusion_example_produces_expected_shape`，对照 `tanh([[5,7],[9,11]])` 逐元素验证（容差 1e-6）。
+

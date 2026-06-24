@@ -2,6 +2,13 @@
 
 > `Autodiff<B, C>` 是一个编译期装饰器——不像 PyTorch 把 autograd 嵌入 tensor 运行时，Burn 将"是否需要梯度"编译为类型差异：推理时排除整个 autodiff crate，反向图在 BFS 逆序执行后自动销毁。
 
+> **导读** · 难度：中等偏难 · 预计 ~60 分钟 + 练习 · [学习地图](../../README.md#学习地图) 阶段 7
+>
+> - **读前应知道**：backprop 算什么、训练与推理为何不同（见 [primer · Part A](../primer.md#part-a--领域最小集)）；装饰器在类型栈最外层（[architecture.md](../architecture.md)）
+> - **AI infra 通用映射**：autograd 放在架构哪一层是通用设计选择，对比 PyTorch 把 autograd 嵌入 tensor（`grad_fn`）（基线见 [primer · Part B](../primer.md#part-b--对比基线速查)）。
+> - **本篇回答**：(1) 前向时梯度图如何构建；(2) 反向为何绕开 fusion 直接调内层后端；(3) 检查点策略如何在内存与重算之间取舍
+> - **配套练习**：[src/autodiff-test](../../src/autodiff-test/) — 验证 `z = tanh(x*2.0+1.0)` 的梯度
+
 ## Autodiff 在框架中的位置
 
 回顾 [Fusion 篇](kernel-fusion-system-design.md)：Burn 的后端是可组合的——`Autodiff<Fusion<CubeBackend<WgpuRuntime>>>` 中 Autodiff 在最外层。前向操作先经 autodiff 记录梯度图，再入 fusion 引擎排队执行。反向传播则完全绕开 fusion，直接调用内层后端。
@@ -265,6 +272,18 @@ Burn 没有 "grad of grad"。图在反向传播中被消费，`Gradients` 容器
 - 操作与 Backward trait：`burn/crates/burn-autodiff/src/ops/tensor.rs`、`ops/backward.rs`
 - 检查点：`burn/crates/burn-autodiff/src/checkpoint/`（`builder.rs`、`base.rs`、`retro_forward.rs`、`strategy.rs`）
 - 梯度容器：`burn/crates/burn-autodiff/src/grads.rs`
+
+---
+
+## 本篇小结
+
+读完你现在能回答：
+
+- 装饰器 Autodiff 如何把"是否需要梯度"编译为类型差异，推理时整体排除
+- 前向构图与反向 BFS 逆序执行的对应关系，以及反向为何绕开 fusion
+- ComputeBound / MemoryBound 检查点策略各自的取舍
+
+> ✓ **完成自检**：能对比 Burn 的装饰器 Autodiff 和 PyTorch 的内置 autograd——在架构位置、推理开销、高阶梯度、检查点粒度上的差异。
 
 ---
 

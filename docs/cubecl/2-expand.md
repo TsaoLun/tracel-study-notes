@@ -3,7 +3,7 @@
 > **本章锚点**：GELU 示例中 `x / Vector::new(sqrt2)` 这行代码，从 Rust 语法树到 IR 里的 `Operation::Arithmetic(Div, …)`，中间经过两层转换。  
 > **读完能干什么**：能读 `cubecl-macros/src/generate/expression.rs` 中的 `Expression::to_tokens` 匹配臂，解释为什么表达式不是「AST 直连 Operation」；能用 `ArithKernel::define()` 打印 expand 生成的 Scope；能读懂 CubeCL IR 文本格式。
 
-> **前置**：[第一章](1-gelu-launch.md)（launch 调用链、`expand` 何时被调用）。术语见 [summary 词汇表](summary.md#词汇说明表)。
+> **前置**：[第一章](1-gelu-launch.md)（launch 调用链、`expand` 何时被调用）。术语见 [JIT 编译管线](jit-compilation-pipeline.md)。
 
 ---
 
@@ -457,7 +457,7 @@ Expression::FunctionCall { func, args, associated_type: None, .. } => {
 
 ## 作业
 
-> 可运行骨架：[src/ch2-expand-study/](src/ch2-expand-study/)（`cd src/ch2-expand-study && cargo test -- --nocapture`）。
+> 可运行骨架：[src/ch2-expand-study/](../../src/ch2-expand-study/)（`cd src/ch2-expand-study && cargo test -- --nocapture`）。
 
 1. 在 `cubecl-macros/src/generate/expression.rs` 中找到 `Expression::FunctionCall`（两个匹配臂）和 `Expression::MethodCall` 的处理分支，写一段注释说明两者展开方式的差异。（提示：自由函数用 `{path}::expand` 或 `__expand_{name}`；方法调用用 `receiver.__expand_{method}_method`。）
 
