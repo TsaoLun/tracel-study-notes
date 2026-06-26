@@ -67,4 +67,31 @@ mod tests {
             assert!((r - e).abs() < 1e-6, "{r} != {e}");
         }
     }
+
+    // 自证测试：对应 README「动手改」作业 2（插入不可融合 op 观察 fuser closed）
+    // 读者做完开放作业后跑 `cargo test fuser_closed_check` 验证。
+    // 弱验证：trace 字符串随版本变化，这里只断言"插入 slice 后数值仍正确"，
+    // 即 fuser 在不可融合 op 处断开后仍能分别融合两侧并算对。
+    #[test]
+    fn fuser_closed_check() {
+        let device = Device::wgpu(DeviceKind::DefaultDevice);
+
+        let tensor_1 = Tensor::<2>::from_data([[2.0, 3.0], [4.0, 5.0]], &device);
+        // 前半段：clone * 2.0 + 1.0（可融合的 element-wise 链）
+        let y = tensor_1.clone() * 2.0 + 1.0;
+        // 插入不可融合 op：slice 取第一行 → fuser 在此处 closed
+        let sliced = y.slice([0..1]);
+        // 后半段：tanh（再次可融合）
+        let z = sliced.tanh();
+
+        // 手算：slice 取第一行 [5, 7]，tanh([5, 7])
+        let data = z.into_data();
+        let result: Vec<f32> = data.to_vec().unwrap();
+        let expected = [(5.0_f32).tanh(), (7.0_f32).tanh()];
+        assert_eq!(result.len(), 2, "slice 后应为 2 元素");
+        for (r, e) in result.iter().zip(expected.iter()) {
+            assert!((r - e).abs() < 1e-5, "{r} != {e}");
+        }
+        println!("✓ 插入 slice 后数值仍正确（fuser closed 后两侧分别处理）");
+    }
 }

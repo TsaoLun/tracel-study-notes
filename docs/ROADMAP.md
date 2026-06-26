@@ -67,7 +67,7 @@ Burn-ONNX 的系统设计分析尚未开始。详细计划见 [onnx/index.md](bu
 
 ### 练习骨架 crate
 
-`src/ch3-trait-study`、`src/fusion-ch2-queue`、`src/fusion-ch3-drain` 当前是占位骨架（不可运行），对应章节写完时补全。其余待建 crate 在对应章节写作时创建，模板见已存在的骨架。
+`src/ch3-trait-study`、`src/fusion-ch3-drain` 当前是占位骨架（不可运行），对应章节写完时补全。`src/fusion-ch2-queue` 已补全为可运行练习（见 [2-operation-queue.md](burn/fusion/2-operation-queue.md)）。其余待建 crate 在对应章节写作时创建，模板见已存在的骨架。
 
 ---
 

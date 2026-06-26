@@ -22,7 +22,7 @@
 
 ### 反向传播（backprop）算什么
 
-反向传播用链式法则，从 loss 出发，逆着前向算子序列，逐个算出"loss 对每个中间量和参数的偏导（梯度）"。框架需要在前向时记录算子的连接关系（一张图），反向时按相反顺序遍历这张图。训练需要梯度来更新参数；推理不需要，所以"是否构建这张图"是训练与推理的关键区别——也是 Burn 把 Autodiff 做成可在编译期排除的装饰器的动机。用到：[Autodiff](burn/autodiff-system-design.md)、[架构](architecture.md)。
+反向传播用链式法则，从 loss 出发，逆着前向算子序列，逐个算出"loss 对每个中间量和参数的偏导（梯度）"。框架需要在前向时记录算子的连接关系（一张图），反向时按相反顺序遍历这张图。训练需要梯度来更新参数；推理不需要，所以"是否构建这张图"是训练与推理的关键区别——也是 Burn 把 Autodiff 做成可选装饰器的动机：`78f10aec1` 起 `Device::wgpu(...)` 默认不含 Autodiff，`.autodiff()` 后才路由到 `Autodiff<B>` 后端，cargo `autodiff` feature 控制是否链接 autodiff crate。用到：[Autodiff](burn/autodiff-system-design.md)、[架构](architecture.md)。
 
 ### batch、shape 为什么影响"选哪个 kernel"
 
@@ -32,6 +32,10 @@
 
 tanh、ReLU、GELU 等激活函数是逐元素的非线性变换，属于 element-wise 算子。练习 [ch1-gelu-variants](../src/ch1-gelu-variants/) 写的就是 GELU kernel——可以把它当作"一个具体的 element-wise 算子在 GPU 上怎么落地"的样本。
 
+### 延伸：GPU 硬件层背景
+
+本页的 GPU 执行模型只讲到 workgroup / shared memory / 寄存器 / 全局内存的层次。要深入到现代 GPU（Blackwell）的 Tensor Memory、TMA、tcgen05 Tensor Core、warpgroup/cluster 等硬件语义，见工作区内的 [modern-gpu-programming-for-mlsys](../modern-gpu-programming-for-mlsys/)（MLC Community 出品，Part I 九章 + 22 个交互 demo）。本项目的文章停在"框架如何调度 kernel"，它停在"kernel 内部如何利用硬件变快"，两者正交互补。
+
 ---
 
 ## Part B · 对比基线速查
@@ -40,7 +44,7 @@ tanh、ReLU、GELU 等激活函数是逐元素的非线性变换，属于 elemen
 
 ### PyTorch
 
-最主流的深度学习框架。默认是 **eager（即时执行）**：每个 tensor 操作立刻在设备上执行。autograd 把反向能力嵌进 tensor——每个需要梯度的 tensor 携带一个 `grad_fn` 指针，指向"如何算这一步的反向"，`loss.backward()` 顺着这些指针回溯。算子分发由 **Dispatcher**（按设备 / dtype / 是否 autograd 等多级 key 查表）路由到具体实现。`torch.compile`（后端 **Inductor**）是后加的"把一段 eager 代码 trace 成图再编译融合"的路径。本项目对比点：Burn 把 autograd 做成**外层装饰器**而非 tensor 内置（[Autodiff](burn/autodiff-system-design.md)），把后端选择放在 `Device` 路由而非 Dispatcher（[架构](architecture.md)），融合用惰性队列而非 trace（[Fusion](burn/kernel-fusion-system-design.md)）。
+最主流的深度学习框架。默认是 **eager（即时执行）**：每个 tensor 操作立刻在设备上执行。autograd 把反向能力嵌进 tensor——每个需要梯度的 tensor 携带一个 `grad_fn` 指针，指向"如何算这一步的反向"，`loss.backward()` 顺着这些指针回溯。算子分发由 **Dispatcher**（按设备 / dtype / 是否 autograd 等多级 key 查表）路由到具体实现。`torch.compile`（后端 **Inductor**）是后加的"把一段 eager 代码 trace 成图再编译融合"的路径。本项目对比点：Burn 把 autograd 做成**外层装饰器**而非 tensor 内置（`device.autodiff()` 路由，[Autodiff](burn/autodiff-system-design.md)），把后端选择放在 `Device` 路由而非 Dispatcher（[架构](architecture.md)），融合用惰性队列而非 trace（[Fusion](burn/kernel-fusion-system-design.md)）。
 
 ### Triton
 

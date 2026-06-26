@@ -38,6 +38,8 @@ BURN_FUSION_LOG=full cargo run --release
 
 ## 观察点
 
+0. **`.autodiff()` 是 device 的显式属性** — `78f10aec1` 起 autodiff 不再默认开启。代码里 `Device::wgpu(...).autodiff()` 把 device 包成 Autodiff 后端，在此 device 上创建的 tensor 才参与梯度图。漏掉 `.autodiff()` 时 `backward()` 会 panic "Requires autodiff tensor"。
+
 1. **`require_grad()`** — `x.require_grad()` 标记叶子节点需要梯度（`Requirement::Grad`）。
 
 2. **`z.backward()` 返回 `Gradients`** — `backward()` 消费了 `z`，返回包含所有注册梯度的容器。注意 `backward` 之后的 `z` 不能再被使用。
@@ -50,3 +52,13 @@ BURN_FUSION_LOG=full cargo run --release
 
 - 修改代码，在 `z.backward()` 之前加 `println!("{}", z)`——这会提前触发前向执行。然后观察 `backward()` 是否仍能正常工作（应该可以，因为图在前向执行时已构建）。
 - 尝试对 `z` 调用两次 `backward()`——第二次会失败，因为图已在第一次 backward 中被消费。这验证了 Burn 不支持高阶梯度。
+
+## 动手改
+
+改 `src/main.rs` 与测试，先手算梯度公式，再跑 `cargo test -- --nocapture` 验证。
+
+1. **换激活函数**：把 `tanh` 换成 `sigmoid`，即 `z = sigmoid(x*2.0+1.0)`。手算 `∂z/∂x = σ(2x+1) × (1 − σ(2x+1)) × 2`。改测试里的 `expected` 公式，对 x = [[2,3],[4,5]] 逐元素 assert（容差 1e-5）。验证点：测试通过，打印的梯度与手算一致。
+2. **换线性结构**：把链改成 `z = relu(x*2.0 + 1.0)`。手算分段梯度：`2x+1 > 0` 时 `∂z/∂x = 2`，否则 `0`。对 x = [[2,3],[4,5]]（`2x+1` 全为正），预期梯度全为 2。验证点：`grad_x` 全 2.0。
+3. **验证不支持高阶梯度**：在 `z.backward()` 后对返回的 `grads` 或再次拿到的 `z` 再调一次 `backward()`。预测会编译失败或运行时报错（图已消费）。验证点：第二次 `backward()` 不可用——印证 [Autodiff 篇](../../docs/burn/autodiff-system-design.md) "图总是在反向传播后销毁、不支持高阶梯度" 的论点。
+
+> 自证测试：作业 1 的对照版在 `cargo test sigmoid_grad_check`——它用 `sigmoid(x*2.0+1.0)` 断言梯度与 `σ(2x+1)(1-σ(2x+1))*2` 一致，跑完你的修改后用它核对预测。

@@ -68,7 +68,7 @@
 ```rust
 // 假想的「直译」方案——实际不存在
 scope.register(Operation::Arithmetic(Add, BinaryOperands {
-    lhs: a.into_expand(scope).expand,  // ← 需要先拿到 Variable
+    lhs: a.into_expand(scope).expand,  // ← 需要先拿到 Value
     rhs: b.into_expand(scope).expand,
 }), output);
 ```
@@ -76,7 +76,7 @@ scope.register(Operation::Arithmetic(Add, BinaryOperands {
 直译方案需要在 proc-macro 内部决定 3 件事：
 1. 用哪个 `Operation` 变体（`Arithmetic`、`Bitwise`、`Comparison`……）
 2. 如何构造操作数（`BinaryOperands` 还是 `UnaryOperands`）
-3. 输出的 `Variable` 如何分配
+3. 输出的 `Value` 如何分配
 
 而实际的两层方案**把这三件事的决策推迟到 trait 分发层**：
 
@@ -94,7 +94,7 @@ LeftExpandType::into_expand(left, scope).__expand_add_method(scope,
 
 3. **简化 proc-macro 逻辑**：proc-macro 不需要理解"这个操作应该生成算术指令还是位运算指令"——它只需要知道"二元表达式 → `__expand_{op}_method`"，剩下的由 trait 分发解决。这使得 `expression.rs` 中的 `Binary` 分支可以写成一行：`left.__expand_add_method(scope, right)`，而不用写 `match (left_type, right_type) { (f32, f32) => ..., (Vector<f32,4>, Vector<f32,4>) => ..., ... }`。
 
-4. **允许操作间的中间表示**：`into_expand` 返回的 `NativeExpand<T>` 不是裸 `Variable`——它携带类型标记 `PhantomData<T>` 和 scope 上下文。后续的 `__expand_add_method` 可以据此在 `Scope` 里分配正确类型的输出 `Variable`，并选择正确的 `Operation` 变体。
+4. **允许操作间的中间表示**：`into_expand` 返回的 `NativeExpand<T>` 不是裸 `Value`——它携带类型标记 `PhantomData<T>` 和 scope 上下文。后续的 `__expand_add_method` 可以据此在 `Scope` 里分配正确类型的输出 `Value`，并选择正确的 `Operation` 变体。
 
 以 Rust 编译器的术语来说，这相当于在 proc-macro（前端）和 cubecl-core（后端）之间放了一个 **trait-based IR builder**：前端生成方法调用，后端实现这些方法。
 
@@ -185,7 +185,7 @@ fn into_expand(tokens: TokenStream) -> TokenStream {
 }
 ```
 
-它的作用是：把任意值转为「可调用 expand 方法」的形态。对于运行时变量，`into_expand` 返回 `NativeExpand<T>`（携带 `scope` 上下文和对应的 `Variable`）。
+它的作用是：把任意值转为「可调用 expand 方法」的形态。对于运行时值，`into_expand` 返回 `NativeExpand<T>`（携带 `scope` 上下文和对应的 `Value`）。
 
 ---
 
@@ -195,7 +195,7 @@ fn into_expand(tokens: TokenStream) -> TokenStream {
 
 ```rust
 pub struct NativeExpand<T: ?Sized> {
-    pub expand: Variable,     // IR 中的变量句柄
+    pub expand: Value,        // IR 中的值句柄
     _type: PhantomData<T>,    // 编译期类型标记
 }
 ```
@@ -226,7 +226,7 @@ impl_core_binop!(Add, add, Arithmetic::Add);
 `binary_expand`（`cubecl-core/src/frontend/operation/base.rs`，约 line 19）是最终向 `Scope` 注册指令的地方：
 
 ```rust
-pub(crate) fn binary_expand<F, Op>(scope: &Scope, lhs: Variable, rhs: Variable, func: F) -> Variable
+pub(crate) fn binary_expand<F, Op>(scope: &Scope, lhs: Value, rhs: Value, func: F) -> Value
 where F: Fn(BinaryOperands) -> Op, Op: Into<Operation>,
 {
     let item = lhs.value_type();
@@ -433,7 +433,7 @@ Expression::FunctionCall { func, args, associated_type: None, .. } => {
 | `&&` / `||` 消解为 if/else | proc-macro 展开时（`cargo build`） | `cubecl-macros`（generate 层） |
 | `Expression` → `__expand_*_method` 调用（generate） | proc-macro 展开时（`cargo build`） | `cubecl-macros`（generate 层） |
 | `__expand_*_method` 实际执行 → `scope.register(Instruction(...))` | 首次 JIT miss 时（`define()` 内） | `cubecl-core`（host CPU 上执行） |
-| `binary_expand` 分配输出 Variable | 首次 JIT miss 时 | `cubecl-core` |
+| `binary_expand` 分配输出 Value | 首次 JIT miss 时 | `cubecl-core` |
 | `Operation::Branch(...)` 注册 | 首次 JIT miss 时 | `cubecl_ir::branch` |
 | SSA 定点循环优化 | 首次 JIT miss 时（`define()` 之后） | `cubecl-opt` |
 | IR → WGSL/CUDA/SPIR-V 代码生成 | 首次 JIT miss 时（优化之后） | `cubecl-wgpu` / `cubecl-cuda` / … |
@@ -447,7 +447,7 @@ Expression::FunctionCall { func, args, associated_type: None, .. } => {
 ## 小结
 
 1. **两层转换**：parse 层（Rust AST → `Expression` 枚举）→ generate 层（`Expression` → `__expand_*_method` 调用）。proc-macro 不直接把 AST 节点翻译为 IR Operation。
-2. **方法链**：`into_expand` 把值转为 `NativeExpand<T>`（携带 `scope` + `Variable`），然后 `__expand_*_method` 在 `Scope` 中注册 `Instruction`。
+2. **方法链**：`into_expand` 把值转为 `NativeExpand<T>`（携带 `scope` + `Value`），然后 `__expand_*_method` 在 `Scope` 中注册 `Instruction`。
 3. **核心函数**：`binary_expand` 分配输出变量、构造 `BinaryOperands`、调用 `scope.register(Instruction(op, output))`。
 4. **控制流**：`if` 展开为 `branch::if_expand`（注册 `Operation::Branch`），闭包确保 then/else 块各自独立向 `Scope` 注册指令。
 5. **短路逻辑**：`&&`/`||` 被消解为 `if/else` 表达式，天然惰性求值。

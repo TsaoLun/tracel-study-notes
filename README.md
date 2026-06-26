@@ -40,7 +40,7 @@
 
 - **对比基线**（首要）。判断标准：能说出 PyTorch eager + `grad_fn`、Triton autotune 网格、XLA HLO 融合、CUTLASS 模板各是什么——文章用它们做对比来暴露 Burn 的设计权衡。补：[primer · Part B](docs/primer.md#part-b--对比基线速查)。
 
-- **Rust trait 与泛型**（你大概率已具备）。作为 Rust 工程师这里基本无门槛。唯一要熟悉的 Burn 专有模式：后端是**装饰器嵌套** `Autodiff<Fusion<CubeBackend<WgpuRuntime>>>`，在编译期单态化；用户侧 `Tensor` 不带 Backend 泛型，经 `BridgeTensor` 按 `Device` 路由。[架构](docs/architecture.md) 会展开。
+- **Rust trait 与泛型**（你大概率已具备）。作为 Rust 工程师这里基本无门槛。唯一要熟悉的 Burn 专有模式：默认 `Device::wgpu(...)` 展开为 `Fusion<CubeBackend<WgpuRuntime<...>>>`，`.autodiff()` 后在 dispatch 层外包 `Autodiff<...>`，在编译期单态化；用户侧 `Tensor` 不带 Backend 泛型，经 `BridgeTensor` 按 `Device` 路由。[架构](docs/architecture.md) 会展开。
 
 - **GPU 执行模型**。判断标准：能说出 shared memory、寄存器、全局内存三者的速度和共享范围差异。Kernel 以 workgroup（thread block / CUDA block）为单位并行；workgroup 内共享快速 shared memory，workgroup 间不直接通信；寄存器是每线程最快的私有存储，全局内存（GPU DRAM）所有 workgroup 共享但延迟最高。Fusion 有效是因为中间结果不再写回全局内存再读出；Autotune 必要是因为 tile 大小要匹配这几层存储。补：[CUDA Refresher](https://developer.nvidia.com/blog/tag/cuda-refresher/) 的 Memory Hierarchy 和 Execution Model 章节。
 
@@ -92,7 +92,7 @@ cd src/burn-test && BURN_FUSION_LOG=full cargo run --release
 > ✓ 完成标准：能用自己的话解释"为什么 Burn 的 Autodiff 和 Fusion 可以独立演进而不会冲突"。
 
 ### 2. 全景概览
-**[全景篇](docs/burn/burn-systems-architecture.md)** — 以 `z = (x*2.0+1.0).tanh(); z.backward()` 穿行四个系统。如果初次接触，先浏览 §1–§2（架构图和 Tensor 定义），跑一遍「最快上手」的 burn-test，然后在读完后面各系统文章后回来重读全链路时序图。
+**[全景篇](docs/burn/burn-systems-architecture.md)** — 以 `z = (x*2.0+1.0).tanh(); z.backward()` 穿行四个系统（device 须 `.autodiff()`）。如果初次接触，先浏览 §1–§2（架构图和 Tensor 定义），跑一遍「最快上手」的 burn-test，然后在读完后面各系统文章后回来重读全链路时序图。
 
 > ✓ 完成标准：能在脑子里画出一张图——"一行代码触发后，经过哪几层、每层做了什么"。
 
@@ -136,7 +136,7 @@ cd src/burn-test && BURN_FUSION_LOG=full cargo run --release
 > ✓ 完成标准：能解释"如果把 M 放进 Blueprint，JIT 缓存会怎样爆炸"以及 CUTLASS 的等价问题是什么。
 
 ### 7. Autodiff：梯度怎么算
-**[Autodiff](docs/burn/autodiff-system-design.md)** — 回顾 Fusion 篇：`Autodiff<Fusion<B>>` 中 Autodiff 在最外层。读到 §图构建结束后：
+**[Autodiff](docs/burn/autodiff-system-design.md)** — 回顾 Fusion 篇：默认 `Device::wgpu(...)` 不含 Autodiff，`.autodiff()` 后 `Autodiff<Fusion<B>>` 中 Autodiff 在最外层。读到 §图构建结束后：
 
 > ▶ **动手**：`cd src/autodiff-test && cargo test -- --nocapture`
 > 验证 `z = tanh(x*2.0+1.0)` 的梯度。[练习 README](src/autodiff-test/README.md) 列出了观察要点和两个自行验证的问题。

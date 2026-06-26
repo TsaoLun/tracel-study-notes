@@ -599,7 +599,7 @@ pub struct MultiStream<R: FusionRuntime> {
 }
 ```
 
-**`MultiStream` 是多条并发流的协调器**，维护 `HashMap<StreamId, Stream<R>>`。它的核心职责不是融合优化本身（融合发生在单条 `Stream` 内部），而是保证跨流 tensor 共享的正确性。
+**`MultiStream` 是多条并发流的协调器**，维护 `HashMap<StreamId, Stream<R>>`。它的核心职责是保证跨流 tensor 共享的正确性（融合优化本身发生在单条 `Stream` 内部）。
 
 **跨流共享策略（`tag_shared_view`）：**
 
@@ -925,7 +925,7 @@ Block 在以下情况下接受操作：
 > - **resources.inputs/outputs/scalars** 填充 tensor/标量元数据
 > - **writes**（稍后计算）通过分析已填充的资源和操作确定
 
-这就是为什么到 `Block::optimize()` 被调用时（内部调用 `OperationFuser::finish()` → `FuseBlockBuilder::build()`），生成最终融合 kernel 所需的所有信息已经可用！
+因此到 `Block::optimize()` 被调用时（内部调用 `OperationFuser::finish()` → `FuseBlockBuilder::build()`），生成最终融合 kernel 所需的所有信息已经可用。
 
 ### Block 操作注册流程
 

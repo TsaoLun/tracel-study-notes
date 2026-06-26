@@ -1,6 +1,6 @@
 # Burn 的 Autodiff 系统：装饰器模式、类型状态图构建与惰性检查点
 
-> `Autodiff<B, C>` 是一个编译期装饰器——不像 PyTorch 把 autograd 嵌入 tensor 运行时，Burn 将"是否需要梯度"编译为类型差异：推理时排除整个 autodiff crate，反向图在 BFS 逆序执行后自动销毁。
+> `Autodiff<B, C>` 是一个装饰器——不像 PyTorch 把 autograd 嵌入 tensor 运行时，Burn 把 autodiff 做成可选层：`78f10aec1` 起用户通过 `Device::wgpu(...).autodiff()` 路由到 `Autodiff<B>` 后端，叶子 tensor `require_grad()` 才参与梯度图；cargo `autodiff` feature 控制是否链接 autodiff crate（推理二进制可整段排除）。反向图在 BFS 逆序执行后自动销毁。
 
 > **导读** · 难度：中等偏难 · 预计 ~60 分钟 + 练习 · [学习地图](../../README.md#学习地图) 阶段 7
 >
@@ -11,7 +11,7 @@
 
 ## Autodiff 在框架中的位置
 
-回顾 [Fusion 篇](kernel-fusion-system-design.md)：Burn 的后端是可组合的——`Autodiff<Fusion<CubeBackend<WgpuRuntime>>>` 中 Autodiff 在最外层。前向操作先经 autodiff 记录梯度图，再入 fusion 引擎排队执行。反向传播则完全绕开 fusion，直接调用内层后端。
+回顾 [Fusion 篇](kernel-fusion-system-design.md)：Burn 的后端是可组合的。默认 `Device::wgpu(...)` 展开为 `Fusion<CubeBackend<WgpuRuntime<...>>>`（推理，无 Autodiff）；`.autodiff()` 后在 dispatch 层外包 `Autodiff<...>`，Autodiff 在最外层。前向操作先经 autodiff 记录梯度图，再入 fusion 引擎排队执行。反向传播则完全绕开 fusion，直接调用内层后端。
 
 PyTorch 的方案是将 autograd 引擎深度耦合到 tensor 类型和 C++ 运行时中。Burn 走了一条不同的路：**Autodiff 是一个装饰器（decorator），包裹在任意后端外面**。
 
@@ -66,7 +66,7 @@ impl<B: Backend> Backward<B, 2> for Add {
 `binary()` 和 `unary()` 辅助函数（`ops/backward.rs:49`）处理"消费当前节点的梯度 → 按需要复制到各父节点 → 注册到 Gradients 容器"的标准流程。
 
 > ▶ **动手**：`cd src/autodiff-test && cargo test -- --nocapture`
-> 验证 `z = tanh(x*2.0+1.0)` 的梯度计算。观察 `z.backward()` 返回的 `Gradients` 容器，以及 `x.grad(&grads)` 提取出的梯度值。运行带 `BURN_FUSION_LOG=full` 可同时观察 autodiff 触发的前向 fusion 执行。
+> 验证 `z = tanh(x*2.0+1.0)` 的梯度计算。注意构造 device 时必须 `.autodiff()`，叶子 tensor 要 `require_grad()`。观察 `z.backward()` 返回的 `Gradients` 容器，以及 `x.grad(&grads)` 提取出的梯度值。运行带 `BURN_FUSION_LOG=full` 可同时观察 autodiff 触发的前向 fusion 执行。
 
 ### 核心数据结构
 
@@ -162,7 +162,7 @@ fn on_register(&mut self, id: &NodeId, container: &mut TensorContainer) {
 }
 ```
 
-梯度同步不是作为独立操作插入图中，而是通过 `Gradients` 容器上的 `on_register` 钩子在反向传播过程中内联触发——梯度在注册完成后立即可用于同步，无需对整个梯度图做第二遍遍历。
+梯度同步通过 `Gradients` 容器上的 `on_register` 钩子在反向传播过程中内联触发，而非作为独立操作插入图中——梯度在注册完成后立即可用于同步，无需对整个梯度图做第二遍遍历。
 
 ---
 
@@ -234,6 +234,8 @@ Burn 没有 "grad of grad"。图在反向传播中被消费，`Gradients` 容器
 
 ## 与 PyTorch Autograd 对比
 
+**通用问题**：autograd 放在架构的哪一层、是否需要梯度由什么决定。任何 DL 框架都要选：把"需要梯度"做成运行时属性（动态、有开销），还是编译期类型差异（静态、推理零开销但切换要改类型）。
+
 | 维度 | Burn | PyTorch |
 |------|------|---------|
 | 架构 | 装饰器 `Autodiff<B, C>`，编译期参数化 | 内置于 tensor 类型，C++ 运行时 |
@@ -247,9 +249,12 @@ Burn 没有 "grad of grad"。图在反向传播中被消费，`Gradients` 容器
 | 图生命周期 | 总是在反向传播中销毁 | `retain_graph=True/False` |
 | 线程模型 | `GraphMutexClient`，per-device 锁 | GIL + C++ 线程锁 |
 
-最根本的哲学差异：**Burn 的类型系统将"是否需要 autodiff"编译期为类型差异**（`CubeBackend` vs `Autodiff<CubeBackend>`）。PyTorch 将它作为运行时属性（`tensor.requires_grad_()`）。Burn 的方案在推理场景中受益——不需要 autodiff 时，可以编译排除整个 autodiff crate，后端代码完全独立，没有运行时开销。
+**谁该用哪个**：
 
-这也意味着在 Burn 中切换"训练模式"和"推理模式"需要改变类型——实际上是编译期的决策，不是运行时的 flag。这在 Rust 的生态中是自然的（类型驱动编译），但对于习惯了 PyTorch 动态特性的用户需要适应。
+- **要高阶梯度、要运行时切训练/推理、要动态灵活性** → PyTorch：`requires_grad_()` 是运行时 flag，`create_graph=True` 支持高阶梯度，`retain_graph` 控制图生命周期；代价是推理时 tensor 仍携带 `grad_fn` 指针与 autograd 引擎耦合，有运行时开销。
+- **推理二进制要零 autograd 开销、后端要完全解耦、能接受编译期决定是否链接 autodiff crate** → Burn：`Device::wgpu(...)` 不调 `.autodiff()`（推理）与 `device.autodiff()`（训练）走不同 dispatch 路径，cargo `autodiff` feature 关闭时推理二进制整段排除 autodiff crate；代价是不支持高阶梯度、运行时切训练/推理需重新构造 device（PyTorch 的 `requires_grad_()` 是同一 tensor 上的运行时 flag）。
+
+一句话：Burn 把 autodiff 做成装饰器 + cargo feature 编译期可选 + `device.autodiff()` 运行时路由，换推理时无 autograd 运行时开销与后端解耦，PyTorch 把它做成运行时属性换动态灵活与高阶梯度——选择取决于"你推理占比多大、要不要高阶梯度、能否接受编译期决定训练模式"。
 
 ---
 
@@ -279,7 +284,7 @@ Burn 没有 "grad of grad"。图在反向传播中被消费，`Gradients` 容器
 
 读完你现在能回答：
 
-- 装饰器 Autodiff 如何把"是否需要梯度"编译为类型差异，推理时整体排除
+- 装饰器 Autodiff 如何经 `device.autodiff()` 路由 + cargo feature 编译期可选，推理时整体排除
 - 前向构图与反向 BFS 逆序执行的对应关系，以及反向为何绕开 fusion
 - ComputeBound / MemoryBound 检查点策略各自的取舍
 

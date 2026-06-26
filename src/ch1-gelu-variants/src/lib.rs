@@ -209,3 +209,65 @@ fn homework_2_comparison() {
     println!("  适用：固定不变的派生值          适用：调用方指定的结构参数");
     println!("  示例：sqrt2, scale=1.5          示例：scaled: bool, blueprint");
 }
+
+// =========================================================================
+// 自证测试：对应 README「动手改」作业 2（改 vector_size=2）
+// 读者做完开放作业后跑 `cargo test homework_vector2_check` 验证预测。
+// =========================================================================
+
+fn launch_vector2<R: Runtime>(device: &R::Device) -> (CubeDim, Vec<f32>) {
+    let client = R::client(device);
+    let input = &[-1.0, 0.0, 1.0, 5.0, -2.0, 3.0, -0.5, 0.5];
+    let vector_size = 2;
+    // 预测：8 / 2 = 4 个 unit
+    let cube_dim = CubeDim::new_1d(input.len() as u32 / vector_size as u32);
+
+    let output_handle = client.empty(input.len() * core::mem::size_of::<f32>());
+    let input_handle = client.create_from_slice(f32::as_bytes(input));
+
+    unsafe {
+        gelu_array::launch_unchecked::<f32, R>(
+            &client,
+            CubeCount::Static(1, 1, 1),
+            cube_dim,
+            vector_size,
+            BufferArg::from_raw_parts(input_handle, input.len()),
+            BufferArg::from_raw_parts(output_handle.clone(), input.len()),
+        )
+    };
+
+    let bytes = client.read_one(output_handle).unwrap();
+    let output = f32::from_bytes(&bytes).to_vec();
+    (cube_dim, output)
+}
+
+#[test]
+fn homework_vector2_check() {
+    let device = Default::default();
+    let (cube_dim, output_v2) = launch_vector2::<cubecl::cpu::CpuRuntime>(&device);
+
+    // 预测 1：CubeDim::new_1d(4) —— 8 元素 / vector_size=2 = 4 个 unit
+    assert_eq!(cube_dim.x, 4, "vector_size=2, 8 元素 → CubeDim::new_1d(4)");
+
+    // 预测 2：数值与 vector_size=1 一致（向量化只改并行度，不改结果）
+    let client = cubecl::cpu::CpuRuntime::client(&device);
+    let input = &[-1.0, 0.0, 1.0, 5.0, -2.0, 3.0, -0.5, 0.5];
+    let out_h = client.empty(input.len() * core::mem::size_of::<f32>());
+    let in_h = client.create_from_slice(f32::as_bytes(input));
+    unsafe {
+        gelu_array::launch_unchecked::<f32, cubecl::cpu::CpuRuntime>(
+            &client,
+            CubeCount::Static(1, 1, 1),
+            CubeDim::new_1d(input.len() as u32),
+            1,
+            BufferArg::from_raw_parts(in_h, input.len()),
+            BufferArg::from_raw_parts(out_h.clone(), input.len()),
+        )
+    };
+    let output_v1 = f32::from_bytes(&client.read_one(out_h).unwrap()).to_vec();
+
+    for (i, (a, b)) in output_v2.iter().zip(output_v1.iter()).enumerate() {
+        assert!((a - b).abs() < 1e-5, "idx {i}: v2={a} v1={b} 应一致");
+    }
+    println!("✓ vector_size=2: CubeDim.x=4, 数值与 vector_size=1 一致");
+}

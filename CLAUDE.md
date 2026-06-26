@@ -31,7 +31,7 @@ src/                           ← 示例与作业（Cargo workspace，可执行
   ch1-gelu-variants/           ← CubeCL GELU kernel 变体作业
   ch2-expand-study/            ← CubeCL 宏展开观察作业
   ch3-trait-study/             ← （骨架）trait 机制作业
-  fusion-ch2-queue/            ← （骨架）队列机制作业
+  fusion-ch2-queue/            ← Fusion ch2 队列机制作业（可运行）
   fusion-ch3-drain/            ← （骨架）drain 机制作业
 
 burn/          (gitignored)    ← tracel-ai/burn 参考源码
@@ -83,8 +83,8 @@ cd src/ch2-expand-study && cargo test -- --nocapture
 含日志输出的 Fusion 示例：
 
 ```bash
-cd src/burn-test && RUST_LOG=burn_fusion=trace cargo run --release
-cd src/fusion-ch2-queue && RUST_LOG=burn_fusion=trace cargo run --release
+cd src/burn-test && BURN_FUSION_LOG=full cargo run --release
+cd src/fusion-ch2-queue && BURN_FUSION_LOG=full cargo run --release
 ```
 
 ### 验证参考仓库状态

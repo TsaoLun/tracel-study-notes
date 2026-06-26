@@ -477,7 +477,7 @@ where
 
 ## 下章预告
 
-**[第二章 · OperationQueue：惰性执行与"推迟了什么"](index.md#章节目录)**（待写）：`OperationQueue` 的五个字段（`global`/`relative`/`converter`/`operations`/`variables`）；三操作示例中 Clone → ScalarMul → ScalarAdd → Tanh 的入队过程；`println!` 通过 `Display → into_data → read_tensor_float → submit_blocking → drain_stream` 触发执行。
+**[第二章 · OperationQueue：惰性执行与"推迟了什么"](2-operation-queue.md)**：`OperationQueue` 的五个字段（`global`/`relative`/`converter`/`operations`/`variables`）；三操作示例中 Clone → ScalarMul → ScalarAdd → Tanh 的入队过程；`println!` 通过 `Display → into_data → read_tensor_float → submit_blocking → drain_stream` 触发执行。配套练习：[src/fusion-ch2-queue](../../../src/fusion-ch2-queue/)。
 
 ---
 
@@ -488,6 +488,7 @@ where
 | 地图 | [../summary.md](../summary.md) |
 | 计划 | [index.md](index.md) |
 | **专题 1** | **本文** |
-| 专题 2–8 | 见 [计划表](index.md#章节目录) |
+| 专题 2 | [2-operation-queue.md](2-operation-queue.md) |
+| 专题 3–8 | 见 [计划表](index.md#章节目录) |
 
 *Fusion 专题 · 源码 walkthrough · [阅读路径](../../../README.md)（可选的延伸阅读）*

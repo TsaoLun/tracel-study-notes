@@ -92,3 +92,13 @@ fusion trace (1 op, 1 block)  ← Slice kernel，未融合
 - fusion trace 表里出现 `▸ fused ElementWise (... 3 ops)`，三个 element-wise op 合并为一个 `elemwise_fuse` kernel。
 - 数值正确性由测试保证：`cargo test` 跑 `fusion_example_produces_expected_shape`，对照 `tanh([[5,7],[9,11]])` 逐元素验证（容差 1e-6）。
 
+## 动手改
+
+改 `src/main.rs` 的 `main` 与测试里的算子链，先预测融合日志变化，再跑 `BURN_FUSION_LOG=full cargo run --release` 验证。
+
+1. **加一个可融合 op**：在 `y.tanh()` 之前再加一个 element-wise op，例如 `let y2 = y * 0.5; let z = y2.tanh();`。预测 fusion trace 表里 fused ElementWise 的 op 数从 3 变 4，仍是一个 `elemwise_fuse` kernel。验证点：trace 表 `▸ fused ElementWise (... 4 ops)`。
+2. **加一个不可融合 op**：在算子链里插入一个 fuser 不接受的 op（如对 `y` 调 `.slice([0..1])` 或做一次 matmul）。预测 `[fuser] closed on ...` 会在该 op 处出现，融合块在那里断开成两段。验证点：日志里 `still_optimizing → false after op <该 op>`，fusion trace 出现多于一个 block。
+3. **观察缓存命中**：第二次运行同一 binary，预测 `[plan]` 从 `exploration completed` 变 `cache hit`。验证点：第二次运行首条 `[plan]` 即 `cache hit`。
+
+> 自证测试：作业 2 的对照版在 `cargo test fuser_closed_check`——它在算子链插入 `slice`（不可融合 op）后断言数值仍正确，验证 fuser closed 后两侧分别处理。trace 字符串随版本变化，这里只做数值弱验证。
+

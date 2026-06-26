@@ -87,7 +87,7 @@ fn homework_2_ir_dump() {
     println!("在输出中找出：");
     println!("  - Mul 对应的 Operation（应先于 Add）");
     println!("  - Add 对应的 Operation");
-    println!("  - 中间 Variable 如何把 mul 结果传给 add");
+    println!("  - 中间 Value 如何把 mul 结果传给 add");
 }
 
 /// 作业 2 步骤三：概念题（对照 IR dump 阅读）
@@ -103,6 +103,74 @@ fn homework_2_ir_analysis() {
     println!("        先 to_tokens 右子树 Mul，故 mul 的 register 先于 add。");
     println!();
     println!("（先跑 homework_2_ir_dump 对照 Scope 文本。）");
+}
+
+// ---------------------------------------------------------------------------
+// 自证测试：对应 README「动手改」作业 1（把 a + b*c 改成 a*b + c）
+// 读者做完开放作业后跑 `cargo test homework_ab_plus_c_check` 验证预测。
+// ---------------------------------------------------------------------------
+
+#[cube(launch)]
+fn arith_kernel_ab<F: Float>(a: &[F], b: &[F], c: &[F], output: &mut [F]) {
+    if ABSOLUTE_POS < a.len() {
+        // 改成 a*b + c：rustc 先求值 a*b，Mul 先于 Add 注册
+        output[ABSOLUTE_POS] = a[ABSOLUTE_POS] * b[ABSOLUTE_POS] + c[ABSOLUTE_POS];
+    }
+}
+
+#[test]
+fn homework_ab_plus_c_check() {
+    let client = cubecl::cpu::CpuRuntime::client(&Default::default());
+    let a = &[2.0f32];
+    let b = &[3.0f32];
+    let c = &[4.0f32];
+
+    let a_handle = client.create_from_slice(f32::as_bytes(a));
+    let b_handle = client.create_from_slice(f32::as_bytes(b));
+    let c_handle = client.create_from_slice(f32::as_bytes(c));
+    let output_handle = client.empty(a.len() * core::mem::size_of::<f32>());
+
+    arith_kernel_ab::launch::<f32, cubecl::cpu::CpuRuntime>(
+        &client,
+        CubeCount::Static(1, 1, 1),
+        CubeDim::new_1d(a.len() as u32),
+        buffer_arg(a_handle, a.len()),
+        buffer_arg(b_handle, b.len()),
+        buffer_arg(c_handle, c.len()),
+        buffer_arg(output_handle.clone(), a.len()),
+    );
+
+    let bytes = client.read_one(output_handle).unwrap();
+    let output = f32::from_bytes(&bytes);
+    // 预测：a*b + c = 2*3 + 4 = 10
+    assert_eq!(output[0], 10.0, "2*3 + 4 should be 10");
+
+    // IR 侧预测：Mul 先于 Add（a*b 是 + 的左子树，rustc 先求值左子树）
+    let settings = KernelSettings::default().cube_dim(CubeDim::new_1d(1));
+    let none = || BufferCompilationArg { inplace: None };
+    let kernel = arith_kernel_ab::ArithKernelAb::<f32, cubecl::cpu::CpuRuntime>::new(
+        settings,
+        client,
+        none(),
+        none(),
+        none(),
+        none(),
+    );
+    let def = kernel.define();
+    let body = format!("{}", def.body);
+    // IR 用运算符符号（* +）而非 "Mul"/"Add" 字面量。
+    // f32 乘法行含 " * %" 且类型标注 "-> (f32)"；
+    // f32 加法行含 " + %" 且 "-> (f32)"。
+    // 排除地址计算里的 u32 + / u32 < 等。
+    let (mul_pos, add_pos) = (
+        body.lines().position(|l| l.contains(" * %") && l.contains("-> (f32)")),
+        body.lines().position(|l| l.contains(" + %") && l.contains("-> (f32)")),
+    );
+    assert!(
+        mul_pos.is_some() && add_pos.is_some() && mul_pos < add_pos,
+        "f32 Mul 行应先于 f32 Add 行出现：mul_line={mul_pos:?} add_line={add_pos:?}\n{body}"
+    );
+    println!("✓ a*b + c = 10.0，IR 中 Mul 先于 Add");
 }
 
 // ---------------------------------------------------------------------------

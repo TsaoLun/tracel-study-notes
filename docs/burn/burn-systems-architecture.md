@@ -14,20 +14,24 @@
 本文用一行代码贯穿全程：
 
 ```rust
-let x = Tensor::<2>::from_data([[2., 3.], [4., 5.]], &device);
+// .autodiff() 把 device 包成 Autodiff 后端——tensors 在此 device 上才参与梯度图。
+// 78f10aec1 起 autodiff 是 device 的显式属性，不再默认开启。
+let device = Device::wgpu(DeviceKind::DefaultDevice).autodiff();
+let x = Tensor::<2>::from_data([[2., 3.], [4., 5.]], &device).require_grad();
 let z = (x.clone() * 2.0 + 1.0).tanh();
-z.backward();
+let grads = z.backward();
 ```
 
-这四行触发了一套完整的系统链路：操作排队与融合、自动调参、Rust 宏到 GPU 二进制生成、以及自动微分。本文展开每一步的系统设计——为什么这么设计，和主流方案的区别，以及设计的限制。
+这几行触发了一套完整的系统链路：操作排队与融合、自动调参、Rust 宏到 GPU 二进制生成、以及自动微分。本文展开每一步的系统设计——为什么这么设计，和主流方案的区别，以及设计的限制。
 
-先看总体架构：
+先看总体架构。默认 `Device::wgpu(...)` 的内部展开是 `Fusion<CubeBackend<WgpuRuntime<...>>>`（不含 Autodiff，用于推理）。`.autodiff()` 在外层再包 `Autodiff`：
 
 ```
-Autodiff<Fusion<CubeBackend<WgpuRuntime<AutoCompiler>>>>
-  ↑ 装饰器模式——每层包裹下一层，各层独立
+推理：  Fusion<CubeBackend<WgpuRuntime<AutoCompiler>>>
+训练：  Autodiff<Fusion<CubeBackend<WgpuRuntime<AutoCompiler>>>>
+            ↑ device.autodiff() 在 dispatch 层外包
 
-  Autodiff    ← 梯度跟踪、图构建、反向传播
+  Autodiff    ← 梯度跟踪、图构建、反向传播（device.autodiff() 后启用）
   Fusion      ← 操作排队、融合优化、执行调度
   CubeBackend ← CubeCL 运行时 + 融合 fuser 注册
   WgpuRuntime ← wgpu 设备抽象、内存管理、kernel 编译与启动
@@ -132,7 +136,7 @@ relative: [Init(#0),       MulScalar(#0, #s0),        AddScalar(#1, #s1),      T
 2. **跨 stream 共享**：tensor clone 到另一线程，源 stream 在共享前 drain
 3. **显式 sync**：`client.sync(|| ...)`（`burn/crates/burn-fusion/src/client.rs:142`）
 
-在我们的示例中，`z.backward()` 需要前向结果来计算梯度，所以 backward 调用间接触发了前向的 drain。
+在我们的示例中，`z.backward()`（须在 `.autodiff()` device 上的 tensor 才可调用）需要前向结果来计算梯度，所以 backward 调用间接触发了前向的 drain。
 
 ### Stream 与 MultiStream：并发安全的操作隔离
 
@@ -452,20 +456,19 @@ IR:    Index(lhs, AbsolutePos)  →  var#1
        Store(var#3, out@AbsolutePos)
 ```
 
-`ABSOLUTE_POS` 成为 `VariableKind::Builtin(Builtin::AbsolutePos)`。`#[comptime]` 参数被标记为 `is_const: true`——在宏展开阶段保持 Rust 值而非转变为 IR 变量。`comptime!` 宏（`lib.rs:190`）直接将内容作为 Rust 代码传入，绕过 IR 生成。这些 comptime 值的哈希进入 `KernelId::info`——不同操作序列产生不同的 `KernelId`，触发不同的编译或缓存命中。
+`ABSOLUTE_POS` 成为一个内建值（`Builtin::AbsolutePos`，`Builtin` 是独立枚举）。`#[comptime]` 参数被标记为 `is_const: true`——在宏展开阶段保持 Rust 值而非转变为 IR 值。`comptime!` 宏（`lib.rs:190`）直接将内容作为 Rust 代码传入，绕过 IR 生成。这些 comptime 值的哈希进入 `KernelId::info`——不同操作序列产生不同的 `KernelId`，触发不同的编译或缓存命中。
 
 `#[unroll]` 标记的 for 循环在宏代码生成阶段展开（`generate/expression.rs:259`），不是 IR 层面的优化 pass。循环边界必须是 comptime 常量，宏在 Rust 的 `for` 循环中为每次迭代调用一次 body 闭包——循环体被物理复制 N 次。这对融合 kernel 至关重要：`FuseBlockConfig.ops` 的操作序列在编译期展开为直线代码。
 
 ### 第二步：IR 设计 —— 嵌套 Scope 树而非 CFG
 
-CubeCL 的 IR 使用**嵌套 Scope 树**（`cubecl/crates/cubecl-ir/src/scope.rs:36`）：
+CubeCL 的 IR 使用**嵌套 Scope 树**（`cubecl/crates/cubecl-ir/src/scope.rs:34`）：
 
 ```rust
 pub struct Scope {
     pub instructions: RefCell<Vec<Instruction>>,
-    pub return_value: Option<Variable>,
-    pub locals: RefCell<Vec<Variable>>,
-    pub const_arrays: RefCell<Vec<(Variable, Vec<Variable>)>>,
+    pub return_value: Option<Value>,
+    pub locals: RefCell<Vec<Value>>,
     pub global_state: GlobalState,
 }
 ```
@@ -588,11 +591,11 @@ pub struct Autodiff<B, C = NoCheckpointing> {
 }
 ```
 
-`B` 是任意 `Backend`。`Autodiff<B>` 自身也实现 `Backend`——这意味着可以写出 `Autodiff<Fusion<CubeBackend<WgpuRuntime>>>` 这样的嵌套。与 PyTorch 的根本差异：**Burn 将"是否需要 autodiff"编译期为类型差异**。推理场景直接用 `CubeBackend`，autodiff 代码完全排除在二进制之外。PyTorch 将其作为运行时属性（`tensor.requires_grad_()`）。
+`B` 是任意 `Backend`。`Autodiff<B>` 自身也实现 `Backend`——这意味着可以写出 `Autodiff<Fusion<CubeBackend<WgpuRuntime>>>` 这样的嵌套。与 PyTorch 的差异落在两个维度：**编译期**——cargo `autodiff` feature 控制是否链接 autodiff crate（推理二进制可整段排除）；**运行时**——`78f10aec1` 起用户通过 `Device::wgpu(...).autodiff()` 把 device 路由到 `Autodiff<B>` 后端，叶子 tensor 再 `require_grad()` 才参与梯度图。PyTorch 将"是否需要梯度"作为运行时属性（`tensor.requires_grad_()`），无编译期排除。
 
 ### 图构建：Tape-based Walkthrough
 
-`z.backward()` 调用前，前向操作必须已执行。前向执行时，每个 op 同时注册其反向步骤到 `AutodiffServer.steps: HashMap<NodeId, StepBoxed>`。整个流程是 tape-based 的，和 PyTorch 一致。
+`z.backward()` 调用前，前向操作必须已执行，且 `z` 须在 `.autodiff()` device 上创建。前向执行时，每个 op 同时注册其反向步骤到 `AutodiffServer.steps: HashMap<NodeId, StepBoxed>`。整个流程是 tape-based 的，和 PyTorch 一致。
 
 回到我们的示例。对 `z = (x * 2.0 + 1.0).tanh()` 进行 trace：
 
@@ -688,7 +691,7 @@ TanhBackward 需要 y → checkpointer.retrieve_node_output(y)
 
 ### 反向执行：BFS 逆序
 
-`z.backward()` → `AutodiffServer::backward()`（`runtime/server.rs:62`）：
+`z.backward()`（仅 `DispatchDevice::Autodiff` 上的 float tensor 可调用）→ `AutodiffServer::backward()`（`runtime/server.rs:62`）：
 
 1. **构建 tape**：`BreadthFirstSearch::traverse()` 从 z 做 BFS，`build_tape()` 的闭包按 `step.depth()`（即 `order` 字段）将 step 分组
 2. **逆序执行**：`tape.into_iter().rev()`——depth 最大（叶子节点）先执行
@@ -732,7 +735,7 @@ fn on_register(&mut self, id: &NodeId, container: &mut TensorContainer) {
 }
 ```
 
-`n_required_map` 以引用计数跟踪每个参数还有多少路梯度待注册。计数归零时才提交同步——无需对整个梯度图做第二遍遍历。梯度同步不是作为独立操作插入图中，而是在 `Gradients` 容器上钩子化——在梯度注册完成后立即可用于同步。
+`n_required_map` 以引用计数跟踪每个参数还有多少路梯度待注册。计数归零时才提交同步——无需对整个梯度图做第二遍遍历。梯度同步在 `Gradients` 容器上钩子化，而非作为独立操作插入图中——在梯度注册完成后立即可用于同步。
 
 ### 内存管理：图生命周期
 
@@ -748,15 +751,15 @@ fn on_register(&mut self, id: &NodeId, container: &mut TensorContainer) {
 
 | 维度 | Burn | PyTorch |
 |------|------|---------|
-| 架构 | 装饰器 `Autodiff<B, C>`，编译期参数化 | 内置于 tensor 类型，C++ 运行时 |
-| 梯度跟踪 | 编译期类型区分 | 运行时 `requires_grad_()` |
+| 架构 | 装饰器 `Autodiff<B, C>`，经 `device.autodiff()` 运行时路由 + cargo feature 编译期链接 | 内置于 tensor 类型，C++ 运行时 |
+| 梯度跟踪 | 运行时 `device.autodiff()` + `require_grad()`（cargo feature 控制是否链接） | 运行时 `requires_grad_()` |
 | 图构建 | Tape-based，eager | Tape-based，eager |
 | 图存储 | `HashMap<NodeId, StepBoxed>` 扁平 | `grad_fn` 指针链 DAG |
 | 遍历 | BFS 分层 + 逆序 | 拓扑排序 |
 | 高阶梯度 | 不支持 | `create_graph=True` |
 | 检查点 | op 级标记 + 策略参数化 | 手动 `checkpoint()` context |
 | 分布式 | `on_register` 钩子 + 引用计数 | `DistributedDataParallel` |
-| 推理模式 | 编译期排除 autodiff crate | 运行时 `torch.no_grad()` |
+| 推理模式 | cargo `autodiff` feature 不链接 + `device` 不调 `.autodiff()` | 运行时 `torch.no_grad()` |
 | 图生命周期 | 反向传播中销毁 | `retain_graph=True/False` |
 | 线程模型 | `GraphMutexClient`，per-device 锁 | GIL + C++ 线程锁 |
 | 反向融合 | 不支持（绕开 fusion 层） | 不支持 |
@@ -777,7 +780,9 @@ fn on_register(&mut self, id: &NodeId, container: &mut TensorContainer) {
 
 ```rust
 // ─── 前向：Fusion + Autodiff 记录 ───
-let x = Tensor::<2>::from_data([[2., 3.], [4., 5.]], &device);
+// device 经 .autodiff() 路由到 Autodiff<Fusion<...>> 后端
+let device = Device::wgpu(DeviceKind::DefaultDevice).autodiff();
+let x = Tensor::<2>::from_data([[2., 3.], [4., 5.]], &device).require_grad();
 // → Tensor::from_data()
 //   → BridgeTensor::float(Dispatch::float_from_data(data, device))
 //   → Fusion::float_from_data()
@@ -792,7 +797,7 @@ let z = (x.clone() * 2.0 + 1.0).tanh();
 //   （MemoryBound: temp, y 通过 RetroForward 可重算）
 
 // ─── backward 触发 drain → Fusion 执行 → 反向传播 ───
-z.backward();
+let grads = z.backward();
 // 1. 前向必须已执行（反向需要中间结果）→ drain 触发
 //    MultiStream::drain(ExecutionMode::Sync)
 //
@@ -830,7 +835,7 @@ z.backward();
 // 8. 图清理:
 //    GraphMemoryManagement::free_unavailable_nodes
 
-let grad_x = x.grad();
+let grad_x = x.grad(&grads);
 // → Gradients 容器中查询 x.node.id
 // → ∂z/∂x = (1 - tanh²(2x+1)) × 2
 ```
@@ -867,13 +872,15 @@ let grad_x = x.grad();
 
 ### 各系统核心设计选择总结
 
-| 系统 | 核心选择 | 替代方案 | 取舍 |
-|------|---------|---------|------|
-| Fusion | 惰性队列 + 同步点触发 | XLA 静态编译 / PyTorch eager | 探索开销换无静态图需求 |
-| Autotune | 策略枚举 | Triton 参数网格 | 覆盖范围换候选最少化 + 无效组合为零 |
-| JIT | comptime 泛型模板 | Triton 运行时 JIT / Candle AOT | 编译期开销换运行时一致性 + 融合特化 |
-| Autodiff | 装饰器模式 + 类型状态构建 | PyTorch 内置 autograd | 推理编译期排除 crate + 图销毁保证正确性 |
-| Memory | Page/Slice 三层分配 | 每次创建 wgpu buffer | 少量空闲内存换大幅减少 GPU 分配调用 |
+每个系统都在解一个通用 AI infra 问题；下表把 Burn 的选择、替代方案与付出的代价并置，取舍由读者按使用场景判断。
+
+| 系统 | 通用问题 | 核心选择 | 替代方案 | 取舍 |
+|------|---------|---------|---------|------|
+| Fusion | 多 op 合一 kernel 省开销，决策放何时 | 惰性队列 + 同步点触发 | XLA 静态编译 / PyTorch eager | 探索开销换无静态图需求 |
+| Autotune | 为 shape/硬件选最快 kernel，搜索精度 vs 代价 | 策略枚举 | Triton 参数网格 | 覆盖范围换候选最少化 + 无效组合为零 |
+| JIT | kernel 源码编成 GPU 二进制，分几段 | comptime 泛型模板 | Triton 运行时 JIT / Candle AOT | 编译期开销换运行时一致性 + 融合特化 |
+| Autodiff | autograd 放哪层，是否需要梯度由什么决定 | `device.autodiff()` 路由 + 装饰器 `Autodiff<B>` + 类型状态构建 | PyTorch 内置 autograd | cargo feature 编译期排除 crate + 运行时 device 开关 + 图销毁保证正确性 |
+| Memory | GPU 显存怎么分配减少调用 | Page/Slice 三层分配 | 每次创建 wgpu buffer | 少量空闲内存换大幅减少 GPU 分配调用 |
 
 ### 关键源码入口总览
 

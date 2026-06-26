@@ -17,6 +17,8 @@
 
 **不存在一套参数在所有场景下最优**。Autotune 就是在运行时为具体的 (shape, dtype, hardware, fusion_combination) 搜索最佳 kernel 实现。
 
+> **延伸 · GPU 性能模型**：tile 大小为何要匹配 shared memory / 寄存器 / Tensor Core 的容量？roofline 模型如何量化一个 kernel 是 compute bound 还是 memory bound？见 [modern-gpu-programming-for-mlsys](../../modern-gpu-programming-for-mlsys/) 的 `chapter_performance`（roofline）与 `chapter_gemm_basics` / `chapter_gemm_async` / `chapter_gemm_advanced`（GEMM 九步优化阶梯）。
+
 但 autotune 本身有代价：每个候选方案都需要在 GPU 上真正跑几次来测量性能。如果候选太多，首次执行延迟不可接受——用户不会等 30 秒来做 kernel tuning。
 
 CubeCL 的 autotune 设计核心是在**搜索精度**和**搜索代价**之间找平衡。
@@ -230,10 +232,14 @@ pub struct TuneInput<'a, R, O> {
 
 ## 与 Triton Autotuner 对比
 
-| 维度 | CubeCL | Triton |
+**通用问题**：为具体的 (shape, dtype, hardware, fusion 组合) 选出最快的 kernel——既要搜索精度，又要把首次执行的搜索延迟压在用户可接受的预算内。这是任何带 autotune 的框架都要解的约束：候选越多精度越高，但每个候选需 3 warmup + 10 sample ≈ 13 次 launch，按 10μs/launch 计，180 候选的冷启动约 23ms，叠加 BERT 级模型 ~30 个不同 matmul shape 与 fusion 组合后，autotune 时间进入秒级。
+
+两种解法沿着同一约束的两端走：
+
+| 维度 | CubeCL：策略枚举 | Triton：参数网格 |
 |------|--------|--------|
 | 搜索空间定义 | 枚举手写策略（闭包） | 参数网格（Block size、num_warps 等） |
-| 候选数 | 6--35 | 数十到数百（网格爆炸） |
+| 候选数 | 6--35 | 数十到数百（5×4×3×3 = 180） |
 | 搜索算法 | 优先级分组 + 批量提前终止 | exhaustive 或启发式/遗传 |
 | 首次延迟 | 低（候选少 + 早停） | 可能很高（全网格搜索） |
 | 覆盖面 | 由 kernel 作者决定 | 由网格大小决定 |
@@ -248,7 +254,12 @@ pub struct TuneInput<'a, R, O> {
 | 正确性验证 | `autotune-checks` feature：运行所有候选并比对 | 无内置 |
 | 策略表达力 | 低（需手写每个候选 kernel） | 高（改参数即可生成） |
 
-最根本的哲学差异：**CubeCL 信任 kernel 作者能枚举高质量策略**——用人力换搜索范围缩小。**Triton 信任编译器能对任何参数生成正确代码**——用搜索换人力投入减少。
+**各自付的代价**：
+
+- **Triton** 信任编译器能对任何参数生成正确代码——用搜索换人力投入减少。代价是候选爆炸带来的首次延迟，以及无效组合需在运行时排除。适合**研究探索、单平台、愿意为单次 autotune 付秒级预算**的场景。
+- **CubeCL** 信任 kernel 作者能枚举高质量策略——用人力换搜索范围缩小。代价是覆盖面由作者决定：作者没为某种 shape 注册策略时 autotune 也救不了。适合**库作者已为常见 shape 手写优化、多平台部署、冷启动预算紧**的场景。
+
+一句话：Triton 把工作量放在编译器，CubeCL 把工作量放在 kernel 作者；选择取决于"你有 kernel 工程师写候选，还是你愿意让用户等 autotune"。
 
 ---
 

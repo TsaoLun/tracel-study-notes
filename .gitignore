@@ -12,3 +12,4 @@ src/*/target/
 src/*/Cargo.lock
 .DS_Store
 How does automatic kernel fusion work in burn_.mhtml
+modern-gpu-programming-for-mlsys/

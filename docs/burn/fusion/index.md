@@ -92,7 +92,7 @@ RUST_LOG=burn_fusion=trace,cubecl_wgpu::runtime=trace cargo run --release
 | 章 | 文件 | 标题 | 读完能解释 | 核心源码锚点 |
 |:---:|------|------|------------|--------------|
 | 1 | [1-client-server.md](1-client-server.md) | 双客户端-服务器：从 `from_data` 到 GPU buffer | Fusion 和 CubeCL 各自有独立的 client-server；一次 tensor 分配穿过两条链路 | `burn/` · `crates/burn-fusion/src/client.rs`（`GlobalFusionClient`）、`crates/burn-fusion/src/server.rs`（`FusionServer`）；`cubecl/` · `crates/cubecl-wgpu/src/compute/server.rs`（`WgpuServer`）、`crates/cubecl-runtime/src/memory_management/memory_pool/`（`MemoryManager`、`SlicedPool`） |
-| 2 | 2-operation-queue.md | OperationQueue：惰性执行与"推迟了什么" | `OperationQueue` 的五个字段（`global`/`relative`/`converter`/`operations`/`variables`）；操作入队但不执行意味着什么；什么触发 drain | `burn/` · `crates/burn-fusion/src/stream/queue/base.rs`（`OperationQueue`）、`crates/burn-fusion/src/op.rs`（`OperationIr`）、`crates/burn-fusion/src/stream/context.rs`（`StreamId`） |
+| 2 | [2-operation-queue.md](2-operation-queue.md) | OperationQueue：惰性执行与"推迟了什么" | `OperationQueue` 的五个字段（`global`/`relative`/`converter`/`operations`/`variables`）；操作入队但不执行意味着什么；什么触发 drain | `burn/` · `crates/burn-fusion/src/stream/queue/base.rs`（`OperationQueue`）、`crates/burn-fusion/src/op.rs`（`OperationIr`）、`crates/burn-fusion/src/stream/context.rs`（`StreamId`） |
 | 3 | 3-drain-processor.md | Drain 与 Processor：Policy 状态机 | `MultiStream::drain` 全场；Policy 的 Explore/Defer/Execute 三态决策；`ExecutionMode::Sync` vs `Lazy` 的区别 | `burn/` · `crates/burn-fusion/src/stream/multi.rs`（`drain`）、`crates/burn-fusion/src/stream/execution/processor.rs`（`Processor::process`）、`crates/burn-fusion/src/stream/execution/policy.rs`（`Policy::action`） |
 | 4 | 4-block-scoring.md | 增量融合：Block 注册与 Builder 评分 | `StreamOptimizer` 如何把 op 注册到 Block；Block 的 accept/reject 规则（tensor ID 交集）；Builder 评分如何选出最优 fuser | `burn/` · `crates/burn-fusion/src/stream/execution/explorer.rs`（`Explorer::explore`）、`crates/burn-fusion/src/search/optimization/stream.rs`（`StreamOptimizer`）、`crates/burn-fusion/src/search/block.rs`（`Block::register`、`Block::optimize`）、`crates/burn-fusion/src/search/optimization/blocks.rs`（`BlocksOptimizer`） |
 | 5 | 5-fuse-block-builder.md | FuseBlockBuilder：reads、writes 与数据流分析 | `reads`（所有被读 tensor，含中间结果）vs `tensor_writes`（只有最终输出写全局内存）；`tensor_writes()` 的数据流分析决定哪些中间结果不需要写回 | `burn/` · `crates/burn-cubecl-fusion/src/engine/trace/block.rs`（`FuseBlockBuilder`、`tensor_writes`、`build`）、`crates/burn-cubecl-fusion/src/engine/trace/fuser.rs`（`TraceFuser`） |
@@ -231,8 +231,8 @@ RUST_LOG=burn_fusion=trace,cubecl_wgpu::runtime=trace cargo run --release
 
 | 状态 | 文档 |
 |------|------|
-| ✅ 已写 | `1-client-server.md` |
-| 📋 待写 | `2-operation-queue.md` … `8-cross-stream-channel.md` |
+| ✅ 已写 | `1-client-server.md`、`2-operation-queue.md` |
+| 📋 待写 | `3-drain-processor.md` … `8-cross-stream-channel.md` |
 | 📎 地图 | `../summary.md` |
 | 📎 本计划 | `index.md` |
 | 📎 外部草稿 | [Gist](https://gist.github.com/nihalpasham/fc128f074e20d880bfd97198c2ac784b) |
@@ -247,6 +247,7 @@ RUST_LOG=burn_fusion=trace,cubecl_wgpu::runtime=trace cargo run --release
 | 计划 | **本文** | 新发布 |
 | ONNX | [../onnx-summary.md](../onnx-summary.md) | 已发布 |
 | 专题 1 | [1-client-server.md](1-client-server.md) | 已发布 |
-| 专题 2–8 | `2-operation-queue.md` … | 待写 |
+| 专题 2 | [2-operation-queue.md](2-operation-queue.md) | 已发布 |
+| 专题 3–8 | `3-drain-processor.md` … | 待写 |
 
 *Burn 底层机制系列 · 综合地图见 [README](../../../README.md)*

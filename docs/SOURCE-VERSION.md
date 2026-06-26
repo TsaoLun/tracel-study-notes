@@ -107,9 +107,19 @@ cd cubek  && git pull && cd ..
 
 CubeCL commit `35b861d0` (`refactor: Simplify Variable to align it with existing IRs`) 将 `Variable` 重命名为 `Value`，`VariableKind` 重命名为 `ValueKind`，后者从 15+ 变体简化为 2 个变体（`Value { id }` 和 `Constant`）。
 
-**影响文章**：`jit-compilation-pipeline.md` 中讨论 `Variable` 和 `VariableKind` 的段落需要更新命名，但概念性描述（SSA 版本控制、内建变量、常量）仍然准确。
+**影响文章**：`jit-compilation-pipeline.md` 中讨论 `Variable` 和 `VariableKind` 的段落已更新命名（`Value`/`ValueKind`），`burn-systems-architecture.md` 中引用的 Scope 结构与 `ABSOLUTE_POS` 内建说明同步更新。概念性描述（SSA 版本控制、内建变量、常量）保持准确。
 
-**状态**：待更新——低优先级（概念正确，命名偏旧）。
+**状态**：✅ 已完成
+
+### 2026-06-10: burn `78f10aec1` — Autodiff 改为 device 显式属性
+
+Burn `78f10aec1` 起 autodiff 不再默认开启：`Device::wgpu(...)` 返回非 autodiff device，在其上创建的 tensor 调 `backward()` 会 panic "Requires autodiff tensor"。需显式 `Device::wgpu(...).autodiff()`（`burn-tensor/src/device.rs:428`）把 device 包成 `DispatchDevice::Autodiff`。
+
+**影响**：`src/autodiff-test/` 的 `main.rs` 与测试均需在 device 构造处加 `.autodiff()`。已修。
+
+**docs 旧心智模型**：多处文章仍按"编译期类型差异决定是否 autodiff"描述，与 `78f10aec1` 后的"device 运行时路由 + cargo feature 编译期链接"双层模型矛盾。已同步更新：`burn/burn-systems-architecture.md`（开篇示例补 `.autodiff()`、架构图区分推理/训练栈、对比表三行、全链路回顾代码补 device 构造与 `grads`）、`architecture.md`（开篇、L31 类型别名、§Autodiff、决策时机表、对比表）、`burn/autodiff-system-design.md`（开篇、位置段、动手 callout、谁该用哪个、小结）、`README.md`、`docs/primer.md`、`docs/concept-index.md`。
+
+**状态**：✅ 已完成
 
 ### 2026-06-16: cubek `4ccfc4f2` — 模块重组、Strategy 扩展与 cfft 公开
 

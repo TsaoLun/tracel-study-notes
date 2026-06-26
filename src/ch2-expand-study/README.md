@@ -45,3 +45,12 @@ cargo test -- --nocapture
 - IR 不是文本输出，而是运行中的 Rust 代码：`cargo test` 在 CPU 上执行 `#[cube]` 函数的 expand 阶段，IR 以 `scope.register(...)` 程序化构建。
 - 运行 `cargo expand --lib`（需要 `cargo install cargo-expand`）可以看到完整宏展开产物。在其中找 `__expand_add_method`——CubeCL 为每个操作符自动生成的分发函数。
 - `IntoExpand` trait 是表达式→IR 映射的关键：每个支持的类型实现 `into_expand`，将 Rust 表达式转换为 `scope.register(...)` 调用（作业 3 追踪）。
+
+## 动手改
+
+先预测，再跑 `cargo test -- --nocapture` 验证。改 `arith_kernel` 函数体即可，测试名不变。
+
+1. **换运算符顺序**：把 `output[ABSOLUTE_POS] = a[ABSOLUTE_POS] + b[ABSOLUTE_POS] * c[ABSOLUTE_POS]` 改成 `a * b + c`（即 `(a*b) + c`）。预测 IR 里 Mul 和 Add 的注册顺序是否变化，再用 `homework_2_ir_dump` 对照。验证点：Mul 仍先于 Add（rustc 先求值 `a*b`），但绑定的输入不同——mul 现在吃 `a,b` 而非 `b,c`。同时改 `homework_2_verify` 的期望值：`2*3 + 4 = 10`。
+2. **加一个 op**：在表达式后接 `* 2.0`，变成 `(a + b*c) * 2.0`。预测 IR 会多出一个 Mul 操作，位置在 Add 之后。跑 `homework_2_ir_dump` 确认多出的 Mul 及其操作数。验证点：IR 末尾出现 `... = %add_result * 2.0` 形态的行。
+
+> 自证测试：作业 1 的对照版在 `cargo test homework_ab_plus_c_check`——它用 `a*b + c` kernel 断言 `output==10.0` 且 IR 中 Mul 先于 Add，跑完你的修改后用它核对预测。

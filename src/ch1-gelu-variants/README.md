@@ -47,3 +47,13 @@ vector_size=4 → CubeDim::new_1d(2), output=[...]
 
 - 同一个 `#[cube]` 函数可以通过类型参数 `N: Size` 生成不同向量化宽度的 kernel——不同的类型参数对应不同的 monomorphized 实例。
 - 运行 `cargo expand --lib`（需要 `cargo install cargo-expand`）可以看到 `#[cube]` 宏展开后的完整代码。下一个练习 [ch2-expand-study](../ch2-expand-study/) 专门观察这一步。
+
+## 动手改
+
+先预测，再跑 `cargo test -- --nocapture` 验证。
+
+1. **改输入长度**：把 `launch_vector1` / `launch_vector4` 里的 `input` 从 8 个元素改成 16 个。预测 `CubeDim::new_1d(...)` 分别变成多少，再运行对照。验证点：`vector_size=1` → `CubeDim::new_1d(16)`，`vector_size=4` → `CubeDim::new_1d(4)`；两次输出数值仍逐元素一致。
+2. **改 vector_size**：新增一个 `launch_vector2`（`vector_size=2`）。预测 8 元素输入下它的 `CubeDim`，再运行验证。验证点：`CubeDim::new_1d(4)`——8/2=4 个 work item。
+3. **改 comptime 常量**：把 `gelu_scalar_scaled` 里的 `scale = comptime!(1.5f32)` 改成 `2.0`。预测输出数值如何变化，再跑 `homework_2_comptime_constant` 对照。验证点：2A 的 launch 签名不变（comptime! 常量不进签名），但输出数值按新 scale 缩放。
+
+> 自证测试：作业 2 的对照版在 `cargo test homework_vector2_check`——跑完你的 `launch_vector2` 后用它核对预测（CubeDim.x=4、数值与 vector_size=1 一致）。

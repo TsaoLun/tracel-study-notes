@@ -13,11 +13,12 @@ git clone https://github.com/tracel-ai/cubecl.git
 
 ## 可运行练习
 
-四个完整可运行的练习，对应阅读路径中的 `▶ 动手` callout：
+五个完整可运行的练习，对应阅读路径中的 `▶ 动手` callout：
 
 | 练习 | 对应文档 | 运行方式 |
 |------|----------|----------|
 | **burn-test**（Fusion） | [kernel-fusion-system-design.md](../docs/burn/kernel-fusion-system-design.md) · [fusion/1-client-server.md](../docs/burn/fusion/1-client-server.md) | `cd src/burn-test && BURN_FUSION_LOG=full cargo run --release` |
+| **fusion-ch2-queue**（Fusion） | [fusion/2-operation-queue.md](../docs/burn/fusion/2-operation-queue.md) | `cd src/fusion-ch2-queue && BURN_FUSION_LOG=full cargo run --release` |
 | **autodiff-test**（Autodiff） | [autodiff-system-design.md](../docs/burn/autodiff-system-design.md) | `cd src/autodiff-test && cargo test -- --nocapture` |
 | **ch1-gelu-variants**（JIT） | [1-gelu-launch.md](../docs/cubecl/1-gelu-launch.md) | `cd src/ch1-gelu-variants && cargo test -- --nocapture` |
 | **ch2-expand-study**（JIT） | [2-expand.md](../docs/cubecl/2-expand.md) | `cd src/ch2-expand-study && cargo test -- --nocapture` |
@@ -31,7 +32,6 @@ git clone https://github.com/tracel-ai/cubecl.git
 | 骨架 crate | 对应（计划中）章节 | 主题 |
 |------------|--------------------|------|
 | `ch3-trait-study` | CubeCL ch3 | trait / impl 与 `#[define]` |
-| `fusion-ch2-queue` | Fusion ch2 | OperationQueue 惰性入队 |
 | `fusion-ch3-drain` | Fusion ch3 | Drain / Processor / Policy 状态机 |
 
 > 章节写完时再为骨架补全可运行代码和 binary target。完整的写作进度见 [docs/ROADMAP.md](../docs/ROADMAP.md)。
