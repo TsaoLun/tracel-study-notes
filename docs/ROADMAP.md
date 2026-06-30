@@ -4,7 +4,7 @@
 
 ## 已完成
 
-### 系统设计文章（6 篇，主线）
+### 系统设计文章（7 篇，主线）
 
 从源码提取设计决策与权衡，互相用 `← | →` 链成闭环。
 
@@ -16,17 +16,18 @@
 - [blueprint-routine-autotune.md](cubek/blueprint-routine-autotune.md) — CubeK 三层纪律
 - [autodiff-system-design.md](burn/autodiff-system-design.md) — Autodiff 装饰器与图构建
 
-### 章节教程（3 篇，可选延伸）
+### 章节教程（4 篇，可选延伸）
 
 逐步展开源码机制的 walkthrough。
 
 - [fusion/1-client-server.md](burn/fusion/1-client-server.md) — from_data 到 GPU buffer 的 client-server 链路
+- [fusion/2-operation-queue.md](burn/fusion/2-operation-queue.md) — OperationQueue：惰性执行与"推迟了什么"
 - [cubecl/1-gelu-launch.md](cubecl/1-gelu-launch.md) — GELU kernel 从 `#[cube]` 到 launch
 - [cubecl/2-expand.md](cubecl/2-expand.md) — `#[cube]` 宏展开内部机制
 
-### 练习 crate（4 个，完整可运行）
+### 练习 crate（5 个，完整可运行）
 
-见 [src/README.md](../src/README.md)：`burn-test`、`autodiff-test`、`ch1-gelu-variants`、`ch2-expand-study`。
+见 [src/README.md](../src/README.md)：`burn-test`、`fusion-ch2-queue`、`autodiff-test`、`ch1-gelu-variants`、`ch2-expand-study`。
 
 ## 计划中
 
@@ -38,7 +39,6 @@
 
 | 计划文件 | 标题 | 对应练习骨架 |
 |----------|------|--------------|
-| `fusion/2-operation-queue.md` | OperationQueue：惰性执行与"推迟了什么" | `src/fusion-ch2-queue` |
 | `fusion/3-drain-processor.md` | Drain 与 Processor：Policy 状态机 | `src/fusion-ch3-drain` |
 | `fusion/4-block-scoring.md` | 增量融合：Block 注册与 Builder 评分 | `fusion-ch4-blocks`（待建） |
 | `fusion/5-fuse-block-builder.md` | FuseBlockBuilder：数据流分析 | `fusion-ch5-builder`（待建） |
@@ -67,7 +67,7 @@ Burn-ONNX 的系统设计分析尚未开始。详细计划见 [onnx/index.md](bu
 
 ### 练习骨架 crate
 
-`src/ch3-trait-study`、`src/fusion-ch3-drain` 当前是占位骨架（不可运行），对应章节写完时补全。`src/fusion-ch2-queue` 已补全为可运行练习（见 [2-operation-queue.md](burn/fusion/2-operation-queue.md)）。其余待建 crate 在对应章节写作时创建，模板见已存在的骨架。
+`src/ch3-trait-study`、`src/fusion-ch3-drain` 当前是占位骨架（不可运行），对应章节写完时补全。其余待建 crate 在对应章节写作时创建，模板见已存在的骨架。
 
 ---
 
