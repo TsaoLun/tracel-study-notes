@@ -4,6 +4,16 @@
 >
 > 单一顺序的学习路径——从头读到尾，在 `▶ 动手` 停下跑练习，然后继续。
 
+## 内容概览
+
+| 轨道 | 已完成 | 计划中 |
+|------|--------|--------|
+| 系统设计文章 | 7 篇（主线闭环） | Burn-ONNX 系统设计 |
+| 章节教程（walkthrough） | 4 篇（Fusion ×2、CubeCL ×2） | Fusion ch3–8、CubeCL ch3–8、ONNX ch1–6 |
+| 练习 crate | 5 个可运行 | 2 个占位骨架 + 若干待建 |
+
+主线只经过系统设计文章与其中嵌入的 `▶ 动手`；章节教程按兴趣选读，与主线文章交叉引用。完整清单见 [ROADMAP](docs/ROADMAP.md)。
+
 ## 适合谁读
 
 面向系统软件 / Rust 后端工程师：对神经网络只有初步概念、用过基础 PyTorch，想借 Burn 这套可读的 Rust 代码库学习通用的 AI infra/sys。
@@ -23,7 +33,7 @@
 | 0 | [领域与基线速查 primer](docs/primer.md) + [前置自检](#第-0-步前置自检) | 必读 | ~20–40 分钟 | NN 算子三类是什么、backprop 算什么、PyTorch/Triton/XLA/CUTLASS 各做什么 |
 | 1 | [架构坐标系](docs/architecture.md) | 入门 | ~20 分钟 | 为什么 Autodiff 和 Fusion 能独立演进 |
 | 2 | [全景篇](docs/burn/burn-systems-architecture.md) | 中等（初次先浏览） | ~30 分钟浏览 | 一行代码触发后经过哪几层、每层做什么 |
-| 3 | [Fusion](docs/burn/kernel-fusion-system-design.md) | 偏易（系统原生） | ~50 分钟 + 练习 | 为什么三个 op 要融成一个 kernel、怎么排队触发 |
+| 3 | [Fusion](docs/burn/kernel-fusion-system-design.md) | 偏易（系统原生） | ~50 分钟 + 1 练习（延伸 +1） | 为什么三个 op 要融成一个 kernel、怎么排队触发 |
 | 4 | [JIT 编译管线](docs/cubecl/jit-compilation-pipeline.md) | 中等（系统原生） | ~90 分钟 + 两个练习 | `a + b` 从 Rust 表达式到 GPU 指令经历了什么 |
 | 5 | [Autotune](docs/cubecl/autotune-system-design.md) | 中等 | ~40 分钟 | CubeCL 与 Triton 在搜索空间和缓存 key 上的差异 |
 | 6 | [CubeK](docs/cubek/blueprint-routine-autotune.md) | 难 | ~40 分钟 | Blueprint 纪律如何防止 JIT 缓存爆炸 |
@@ -63,7 +73,7 @@ git clone https://github.com/tracel-ai/burn-onnx.git
 验证 setup：
 
 ```bash
-cd src && cargo check -p burn-test -p ch1-gelu-variants
+cd src && cargo check -p burn-test -p fusion-ch2-queue -p ch1-gelu-variants
 ```
 
 ## 最快上手（约 30 分钟）
@@ -106,7 +116,13 @@ cd src/burn-test && BURN_FUSION_LOG=full cargo run --release
 
 > ✓ 完成标准：看到 `[plan] exploration completed` 或 `[plan] cache hit`；第二次运行时观察到缓存命中。
 
-> 📖 **延伸阅读**：[fusion/1-client-server.md](docs/burn/fusion/1-client-server.md) — from_data 到 GPU buffer 的 client-server 链路源码 walkthrough。
+> 📖 **延伸阅读（Fusion 专题，按序）**
+>
+> 1. [fusion/1-client-server.md](docs/burn/fusion/1-client-server.md) — from_data 到 GPU buffer 的 client-server 链路
+> 2. [fusion/2-operation-queue.md](docs/burn/fusion/2-operation-queue.md) — `OperationQueue` 五字段与惰性触发；配套练习：
+>
+> ▶ **动手（可选）**：`cd src/fusion-ch2-queue && BURN_FUSION_LOG=full cargo run --release`
+> 观察入队时序与「移除 `println!` 则不执行」。见 [2-operation-queue.md §动手改](docs/burn/fusion/2-operation-queue.md#动手改)。
 
 ### 4. JIT 编译管线：宏到 GPU 二进制
 **[JIT](docs/cubecl/jit-compilation-pipeline.md)** — `#[cube]` 宏展开、IR Scope 树、优化 pass。读到 §IR 优化末尾：
@@ -156,21 +172,44 @@ cd src/burn-test && BURN_FUSION_LOG=full cargo run --release
 
 ## 可选延伸
 
-| 延伸阅读 | 说明 |
-|----------|------|
-| [fusion/1-client-server.md](docs/burn/fusion/1-client-server.md) | Fusion client-server 源码 walkthrough |
-| [cubecl/1-gelu-launch.md](docs/cubecl/1-gelu-launch.md) | GELU kernel 完整生命周期 walkthrough |
-| [cubecl/2-expand.md](docs/cubecl/2-expand.md) | `#[cube]` 宏展开内部机制 |
-| [automatic-kernel-fusion.md](docs/appendix/automatic-kernel-fusion.md) | 旧博客中文翻译（项目起源——这篇文章催生了整个分析和重构） |
+### 章节教程
+
+| 专题 | 章节 | 说明 | 练习 |
+|------|------|------|------|
+| Fusion | [1-client-server](docs/burn/fusion/1-client-server.md) | from_data → GPU buffer 双 client-server | — |
+| Fusion | [2-operation-queue](docs/burn/fusion/2-operation-queue.md) | 惰性入队与 drain 触发 | `src/fusion-ch2-queue` |
+| CubeCL | [1-gelu-launch](docs/cubecl/1-gelu-launch.md) | GELU 从 `#[cube]` 到 launch | `src/ch1-gelu-variants` |
+| CubeCL | [2-expand](docs/cubecl/2-expand.md) | `+` → `__expand_add_method` | `src/ch2-expand-study` |
+
+各专题写作计划（含未写章节）：[fusion/index.md](docs/burn/fusion/index.md) · [cubecl/index.md](docs/cubecl/index.md) · [onnx/index.md](docs/burn/onnx/index.md)
+
+### 导航与附录
+
+| 链接 | 说明 |
+|------|------|
+| [burn/summary.md](docs/burn/summary.md) | Burn 文章与 Fusion 章节索引 |
+| [cubecl/summary.md](docs/cubecl/summary.md) | CubeCL 文章与章节索引 |
+| [cubek/summary.md](docs/cubek/summary.md) | CubeK 文章索引 |
+| [automatic-kernel-fusion.md](docs/appendix/automatic-kernel-fusion.md) | 旧博客中文翻译（项目起源） |
 
 ## 练习速查
 
+### 主线（嵌入阅读路径）
+
 | 步骤 | 练习 | 命令 |
 |------|------|------|
-| 3. Fusion | `src/burn-test` | `BURN_FUSION_LOG=full cargo run --release` |
-| 4. JIT（先） | `src/ch1-gelu-variants` | `cargo test -- --nocapture` |
-| 4. JIT（后） | `src/ch2-expand-study` | `cargo test -- --nocapture` |
-| 7. Autodiff | `src/autodiff-test` | `cargo test -- --nocapture` |
+| 3. Fusion | `src/burn-test` | `cd src/burn-test && BURN_FUSION_LOG=full cargo run --release` |
+| 4. JIT（先） | `src/ch1-gelu-variants` | `cd src/ch1-gelu-variants && cargo test -- --nocapture` |
+| 4. JIT（后） | `src/ch2-expand-study` | `cd src/ch2-expand-study && cargo test -- --nocapture` |
+| 7. Autodiff | `src/autodiff-test` | `cd src/autodiff-test && cargo test -- --nocapture` |
+
+### 延伸（章节教程配套）
+
+| 章节 | 练习 | 命令 |
+|------|------|------|
+| Fusion · [2-operation-queue](docs/burn/fusion/2-operation-queue.md) | `src/fusion-ch2-queue` | `cd src/fusion-ch2-queue && BURN_FUSION_LOG=full cargo run --release` |
+
+练习细节与预期输出见 [src/README.md](src/README.md)。
 
 ---
 
@@ -188,28 +227,33 @@ cd src/burn-test && BURN_FUSION_LOG=full cargo run --release
 ## 仓库结构
 
 ```
-docs/                           src/
-├── primer.md                   ├── Cargo.toml
-├── architecture.md             ├── burn-test/          (Fusion)
-├── concept-index.md            ├── autodiff-test/      (Autodiff)
-├── SOURCE-VERSION.md           ├── ch1-gelu-variants/  (JIT)
-├── ROADMAP.md                  ├── ch2-expand-study/   (JIT)
-├── burn/                       └── ...（计划中骨架见 ROADMAP）
-│   ├── burn-systems-architecture.md
-│   ├── kernel-fusion-system-design.md
-│   ├── autodiff-system-design.md  burn/       (gitignored)
-│   ├── summary.md              cubecl/     (gitignored)
-│   └── fusion/ (1-client-server)  cubek/      (gitignored)
-├── cubecl/                      burn-onnx/  (gitignored)
-│   ├── autotune-system-design.md
-│   ├── jit-compilation-pipeline.md
+docs/                              src/                         （参考源码，gitignore）
+├── primer.md                      ├── Cargo.toml               burn/
+├── architecture.md                ├── README.md                cubecl/
+├── concept-index.md               ├── burn-test/               cubek/（可选）
+├── SOURCE-VERSION.md              ├── fusion-ch2-queue/        burn-onnx/（可选）
+├── ROADMAP.md                     ├── fusion-ch3-drain/  ⚠骨架
+├── burn/                          ├── autodiff-test/
+│   ├── burn-systems-architecture  ├── ch1-gelu-variants/
+│   ├── kernel-fusion-system-design├── ch2-expand-study/
+│   ├── autodiff-system-design     └── ch3-trait-study/   ⚠骨架
 │   ├── summary.md
+│   ├── fusion/
+│   │   ├── 1-client-server.md
+│   │   ├── 2-operation-queue.md
+│   │   └── index.md           （章节计划，已归档）
+│   └── onnx/                  （ONNX 计划，未写）
+├── cubecl/
+│   ├── jit-compilation-pipeline.md
+│   ├── autotune-system-design.md
 │   ├── 1-gelu-launch.md
-│   └── 2-expand.md
+│   ├── 2-expand.md
+│   └── index.md
 ├── cubek/
-│   ├── blueprint-routine-autotune.md
-│   └── summary.md
+│   └── blueprint-routine-autotune.md
 └── appendix/
 ```
+
+⚠ **骨架**：workspace 中已注册，对应章节未写完，当前不可运行。见 [ROADMAP](docs/ROADMAP.md)。
 
 [CLAUDE.md](CLAUDE.md) · 文档以 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) 许可发布。
